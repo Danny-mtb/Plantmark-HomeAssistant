@@ -3,6 +3,11 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.0.1 - 2026-11-14
+
+- Fix the setup and plant forms returning HTTP 500 because Home Assistant could
+  not serialize their custom lambda validators.
+
 ## 1.0.0 - 2026-11-14
 
 - Rebuild Plantmark as a standalone, Marketplace/HACS-compatible Home Assistant

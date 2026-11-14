@@ -53,7 +53,7 @@ class PlantmarkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_LIBRARY_NAME, default=DEFAULT_LIBRARY_NAME
                     ): vol.All(
                         str,
-                        lambda value: value.strip(),
+                        vol.Strip,
                         vol.Length(min=1, max=255),
                     )
                 }
@@ -227,7 +227,7 @@ def _plant_schema(plant: dict[str, Any] | None = None) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required("name", default=plant.get("name", "")): vol.All(
-                str, lambda value: value.strip(), vol.Length(min=1, max=255)
+                str, vol.Strip, vol.Length(min=1, max=255)
             ),
             vol.Optional(
                 "scientific_name", default=plant.get("scientific_name") or ""
