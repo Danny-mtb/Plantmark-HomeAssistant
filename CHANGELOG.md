@@ -3,6 +3,11 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.0.2 - 2026-11-14
+
+- Fix the sensor platform failing to import because the active watering interval
+  helper was referenced before it was defined.
+
 ## 1.0.1 - 2026-11-14
 
 - Fix the setup and plant forms returning HTTP 500 because Home Assistant could

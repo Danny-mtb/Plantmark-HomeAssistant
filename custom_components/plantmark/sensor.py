@@ -49,7 +49,7 @@ SENSORS: tuple[PlantmarkSensorDescription, ...] = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.DAYS,
         icon="mdi:calendar-sync",
-        value_fn=_active_watering_interval,
+        value_fn=lambda plant: _active_watering_interval(plant),
     ),
     PlantmarkSensorDescription(
         key="last_watering_amount",
