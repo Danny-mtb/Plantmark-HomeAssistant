@@ -83,7 +83,7 @@
       },
       "import_plants": {
         "data": {"import_data": "Plantmark-JSON"},
-        "description": "Füge entweder eine JSON-Liste mit Pflanzen oder die alte API-Antwort im Format {\"plants\": [...]} ein. Bereits vorhandene Pflanzen-IDs werden nicht dupliziert.",
+        "description": "Füge entweder eine JSON-Liste mit Pflanzen oder eine alte API-Antwort mit einer Pflanzenliste auf oberster Ebene ein. Bereits vorhandene Pflanzen-IDs werden nicht dupliziert.",
         "title": "Pflanzen importieren"
       },
       "remove_plant": {

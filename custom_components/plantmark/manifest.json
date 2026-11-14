@@ -1,12 +1,13 @@
 {
   "domain": "plantmark",
   "name": "Plantmark",
-  "codeowners": [],
+  "categories": ["garden_plants"],
+  "codeowners": ["@Danny-mtb"],
   "config_flow": true,
-  "documentation": "https://github.com/plantmark/plantmark",
+  "documentation": "https://github.com/Danny-mtb/Plantmark-HomeAssistant",
   "integration_type": "hub",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/plantmark/plantmark/issues",
+  "issue_tracker": "https://github.com/Danny-mtb/Plantmark-HomeAssistant/issues",
   "single_config_entry": true,
   "version": "1.0.0"
 }

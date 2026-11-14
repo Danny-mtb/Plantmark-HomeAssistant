@@ -74,7 +74,7 @@
       },
       "import_plants": {
         "data": {"import_data": "Plantmark JSON"},
-        "description": "Paste either a JSON list of plants or the old API response in the form {\"plants\": [...]}. Existing plant IDs are not duplicated.",
+        "description": "Paste either a JSON list of plants or an old API response containing a top-level plants list. Existing plant IDs are not duplicated.",
         "title": "Import plants"
       },
       "remove_plant": {
