@@ -1,0 +1,92 @@
+{
+  "config": {
+    "abort": {"already_configured": "Plantmark is already configured."},
+    "step": {
+      "user": {
+        "data": {"library_name": "Library name"},
+        "description": "Create a plant library stored entirely in Home Assistant.",
+        "title": "Set up Plantmark"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "needs_water": {"name": "Needs water"},
+      "toxic_to_cats": {"name": "Toxic to cats"},
+      "toxic_to_dogs": {"name": "Toxic to dogs"}
+    },
+    "button": {"water": {"name": "Water"}},
+    "calendar": {"watering_calendar": {"name": "Watering calendar"}},
+    "sensor": {
+      "days_until_watering": {"name": "Days until watering"},
+      "last_watered": {"name": "Last watered"},
+      "last_watering_amount": {"name": "Last watering amount"},
+      "next_watering": {"name": "Next watering"},
+      "season": {
+        "name": "Season",
+        "state": {"summer": "Summer", "winter": "Winter"}
+      },
+      "watering_interval": {"name": "Watering interval"}
+    }
+  },
+  "options": {
+    "abort": {"plant_not_found": "The selected plant no longer exists."},
+    "error": {"invalid_import": "No valid plants were found in the JSON data."},
+    "step": {
+      "init": {
+        "menu_options": {
+          "add_plant": "Add plant",
+          "edit_plant": "Edit plant",
+          "import_plants": "Import plants from JSON",
+          "remove_plant": "Remove plant",
+          "settings": "Settings"
+        },
+        "title": "Manage Plantmark"
+      },
+      "add_plant": {
+        "data": {
+          "image_url": "Image URL",
+          "is_toxic_to_cats": "Toxic to cats",
+          "is_toxic_to_dogs": "Toxic to dogs",
+          "location": "Location or area",
+          "name": "Name",
+          "notes": "Notes",
+          "scientific_name": "Scientific name",
+          "watering_interval_days": "Watering interval (days)"
+        },
+        "description": "Add a plant. Home Assistant calculates its first watering date from today.",
+        "title": "Add plant"
+      },
+      "edit_plant": {"data": {"plant_id": "Plant"}, "title": "Choose plant"},
+      "edit_plant_details": {
+        "data": {
+          "image_url": "Image URL",
+          "is_toxic_to_cats": "Toxic to cats",
+          "is_toxic_to_dogs": "Toxic to dogs",
+          "location": "Location or area",
+          "name": "Name",
+          "notes": "Notes",
+          "scientific_name": "Scientific name",
+          "watering_interval_days": "Watering interval (days)"
+        },
+        "description": "Edit {plant}.",
+        "title": "Edit plant"
+      },
+      "import_plants": {
+        "data": {"import_data": "Plantmark JSON"},
+        "description": "Paste either a JSON list of plants or the old API response in the form {\"plants\": [...]}. Existing plant IDs are not duplicated.",
+        "title": "Import plants"
+      },
+      "remove_plant": {
+        "data": {"plant_id": "Plant to remove"},
+        "description": "The selected plant and its Home Assistant entities will be removed.",
+        "title": "Remove plant"
+      },
+      "settings": {
+        "data": {"default_water_amount_ml": "Default watering amount (ml, 0 = not recorded)"},
+        "description": "Choose the amount recorded when a plant's Water button is pressed.",
+        "title": "Plantmark settings"
+      }
+    }
+  }
+}

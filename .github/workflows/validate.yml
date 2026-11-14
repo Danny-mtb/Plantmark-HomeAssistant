@@ -1,0 +1,41 @@
+name: Validate Home Assistant integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Compile integration
+        run: python -m compileall -q custom_components/plantmark
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: hacs/action@main
+        with:
+          category: integration
+

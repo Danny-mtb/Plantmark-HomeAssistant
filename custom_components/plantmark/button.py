@@ -1,0 +1,47 @@
+"""Watering buttons for Plantmark."""
+
+from __future__ import annotations
+
+from homeassistant.components.button import ButtonEntity
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from . import PlantmarkConfigEntry
+from .const import CONF_DEFAULT_WATER_AMOUNT, DEFAULT_WATER_AMOUNT
+from .entity import PlantmarkEntity
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: PlantmarkConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    coordinator = entry.runtime_data
+    async_add_entities(
+        PlantmarkWaterButton(coordinator, plant_id)
+        for plant_id in sorted(coordinator.data)
+    )
+
+
+class PlantmarkWaterButton(PlantmarkEntity, ButtonEntity):
+    """Record watering directly in Home Assistant storage."""
+
+    _attr_translation_key = "water"
+    _attr_icon = "mdi:watering-can"
+
+    def __init__(self, coordinator, plant_id) -> None:
+        super().__init__(coordinator, plant_id, "water")
+
+    async def async_press(self) -> None:
+        amount = self.coordinator.entry.options.get(
+            CONF_DEFAULT_WATER_AMOUNT, DEFAULT_WATER_AMOUNT
+        )
+        try:
+            await self.coordinator.async_water_plant(
+                self.plant_id,
+                amount_ml=amount if isinstance(amount, int) and amount > 0 else None,
+            )
+        except ValueError as err:
+            raise HomeAssistantError(str(err)) from err
+

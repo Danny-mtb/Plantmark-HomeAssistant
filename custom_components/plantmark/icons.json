@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "needs_water": {"default": "mdi:water-alert"},
+      "toxic_to_cats": {"default": "mdi:cat"},
+      "toxic_to_dogs": {"default": "mdi:dog"}
+    },
+    "button": {"water": {"default": "mdi:watering-can"}},
+    "calendar": {"watering_calendar": {"default": "mdi:calendar-water"}},
+    "sensor": {"last_watering_amount": {"default": "mdi:cup-water"}}
+  }
+}

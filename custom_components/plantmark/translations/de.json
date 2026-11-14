@@ -1,0 +1,103 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Plantmark ist bereits eingerichtet."
+    },
+    "step": {
+      "user": {
+        "data": {"library_name": "Name der Pflanzenbibliothek"},
+        "description": "Erstelle eine Pflanzenbibliothek, die vollständig in Home Assistant gespeichert wird.",
+        "title": "Plantmark einrichten"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "needs_water": {"name": "Benötigt Wasser"},
+      "toxic_to_cats": {"name": "Giftig für Katzen"},
+      "toxic_to_dogs": {"name": "Giftig für Hunde"}
+    },
+    "button": {"water": {"name": "Gießen"}},
+    "calendar": {"watering_calendar": {"name": "Gießkalender"}},
+    "sensor": {
+      "days_until_watering": {"name": "Tage bis zum Gießen"},
+      "last_watered": {"name": "Zuletzt gegossen"},
+      "last_watering_amount": {"name": "Letzte Gießmenge"},
+      "next_watering": {"name": "Nächstes Gießen"},
+      "season": {
+        "name": "Saison",
+        "state": {"summer": "Sommer", "winter": "Winter"}
+      },
+      "watering_interval": {"name": "Gießintervall"}
+    }
+  },
+  "options": {
+    "abort": {
+      "plant_not_found": "Die ausgewählte Pflanze existiert nicht mehr."
+    },
+    "error": {
+      "invalid_import": "In den JSON-Daten wurden keine gültigen Pflanzen gefunden."
+    },
+    "step": {
+      "init": {
+        "menu_options": {
+          "add_plant": "Pflanze hinzufügen",
+          "edit_plant": "Pflanze bearbeiten",
+          "import_plants": "Pflanzen aus JSON importieren",
+          "remove_plant": "Pflanze entfernen",
+          "settings": "Einstellungen"
+        },
+        "title": "Plantmark verwalten"
+      },
+      "add_plant": {
+        "data": {
+          "image_url": "Bild-URL",
+          "is_toxic_to_cats": "Giftig für Katzen",
+          "is_toxic_to_dogs": "Giftig für Hunde",
+          "location": "Standort oder Bereich",
+          "name": "Name",
+          "notes": "Notizen",
+          "scientific_name": "Wissenschaftlicher Name",
+          "watering_interval_days": "Gießintervall (Tage)"
+        },
+        "description": "Füge eine Pflanze hinzu. Home Assistant berechnet den ersten Gießtermin ab heute.",
+        "title": "Pflanze hinzufügen"
+      },
+      "edit_plant": {
+        "data": {"plant_id": "Pflanze"},
+        "title": "Pflanze auswählen"
+      },
+      "edit_plant_details": {
+        "data": {
+          "image_url": "Bild-URL",
+          "is_toxic_to_cats": "Giftig für Katzen",
+          "is_toxic_to_dogs": "Giftig für Hunde",
+          "location": "Standort oder Bereich",
+          "name": "Name",
+          "notes": "Notizen",
+          "scientific_name": "Wissenschaftlicher Name",
+          "watering_interval_days": "Gießintervall (Tage)"
+        },
+        "description": "Bearbeite {plant}.",
+        "title": "Pflanze bearbeiten"
+      },
+      "import_plants": {
+        "data": {"import_data": "Plantmark-JSON"},
+        "description": "Füge entweder eine JSON-Liste mit Pflanzen oder die alte API-Antwort im Format {\"plants\": [...]} ein. Bereits vorhandene Pflanzen-IDs werden nicht dupliziert.",
+        "title": "Pflanzen importieren"
+      },
+      "remove_plant": {
+        "data": {"plant_id": "Zu entfernende Pflanze"},
+        "description": "Die ausgewählte Pflanze und ihre Home-Assistant-Entitäten werden entfernt.",
+        "title": "Pflanze entfernen"
+      },
+      "settings": {
+        "data": {
+          "default_water_amount_ml": "Standard-Gießmenge (ml, 0 = nicht erfassen)"
+        },
+        "description": "Lege fest, welche Menge beim Drücken des Gießen-Buttons gespeichert wird.",
+        "title": "Plantmark-Einstellungen"
+      }
+    }
+  }
+}
