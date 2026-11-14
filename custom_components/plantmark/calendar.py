@@ -31,7 +31,7 @@ class PlantmarkWateringCalendar(
 
     _attr_has_entity_name = True
     _attr_translation_key = "watering_calendar"
-    _attr_icon = "mdi:calendar-water"
+    _attr_icon = "mdi:watering-can"
 
     def __init__(self, coordinator: PlantmarkDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
@@ -58,6 +58,9 @@ class PlantmarkWateringCalendar(
             start = _as_datetime(plant.get("next_watering"))
             if start is None:
                 continue
+            end = _as_datetime(plant.get("next_watering_end"))
+            if end is None or end <= start:
+                end = start + timedelta(minutes=30)
             area_id = plant.get("area_id")
             area = (
                 ar.async_get(self.coordinator.hass).async_get_area(area_id)
@@ -72,14 +75,19 @@ class PlantmarkWateringCalendar(
             events.append(
                 CalendarEvent(
                     start=start,
-                    end=start + timedelta(minutes=30),
-                    summary=f"Water {plant.get('name', 'plant')}",
+                    end=end,
+                    summary=self._summary(str(plant.get("name") or "Plant")),
                     description=plant.get("scientific_name"),
                     location=location,
                     uid=f"plantmark-{plant.get('id')}-{start.isoformat()}",
                 )
             )
         return sorted(events, key=lambda event: event.start)
+
+    def _summary(self, name: str) -> str:
+        if str(self.coordinator.hass.config.language or "en").lower().startswith("de"):
+            return f"💧 {name} gießen"
+        return f"💧 Water {name}"
 
 
 def _as_datetime(value: Any) -> datetime | None:
@@ -91,4 +99,3 @@ def _as_datetime(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=dt_util.UTC)
     return parsed
-

@@ -19,6 +19,7 @@ from homeassistant.util import dt as dt_util
 
 from . import PlantmarkConfigEntry
 from .entity import PlantmarkEntity
+from .plant import watering_interval_range
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -37,6 +38,13 @@ SENSORS: tuple[PlantmarkSensorDescription, ...] = (
         value_fn=lambda plant: _as_datetime(plant.get("next_watering")),
     ),
     PlantmarkSensorDescription(
+        key="watering_window_end",
+        translation_key="watering_window_end",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:calendar-end",
+        value_fn=lambda plant: _as_datetime(plant.get("next_watering_end")),
+    ),
+    PlantmarkSensorDescription(
         key="last_watered",
         translation_key="last_watered",
         device_class=SensorDeviceClass.TIMESTAMP,
@@ -50,6 +58,14 @@ SENSORS: tuple[PlantmarkSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.DAYS,
         icon="mdi:calendar-sync",
         value_fn=lambda plant: _active_watering_interval(plant),
+    ),
+    PlantmarkSensorDescription(
+        key="watering_interval_max",
+        translation_key="watering_interval_max",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        icon="mdi:calendar-range",
+        value_fn=lambda plant: _active_watering_interval_range(plant)[1],
     ),
     PlantmarkSensorDescription(
         key="last_watering_amount",
@@ -70,7 +86,7 @@ SENSORS: tuple[PlantmarkSensorDescription, ...] = (
         key="season",
         translation_key="season",
         device_class=SensorDeviceClass.ENUM,
-        options=["summer", "winter"],
+        options=["spring", "summer", "autumn", "winter"],
         icon="mdi:theme-light-dark",
         value_fn=lambda plant: plant.get("current_season"),
     ),
@@ -122,6 +138,16 @@ class PlantmarkSensor(PlantmarkEntity, SensorEntity):
         """Return the sensor's current value."""
         return self.entity_description.value_fn(self.plant or {})
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose both ends of an active watering interval."""
+        if self.entity_description.key != "watering_interval" or self.plant is None:
+            return None
+        minimum, maximum = watering_interval_range(
+            self.plant, self.plant.get("current_season")
+        )
+        return {"minimum_days": minimum, "maximum_days": maximum}
+
 
 def _as_datetime(value: Any) -> datetime | None:
     if not isinstance(value, str):
@@ -142,13 +168,8 @@ def _days_until(value: Any) -> int | None:
 
 
 def _active_watering_interval(plant: dict[str, Any]) -> int | None:
-    season = plant.get("current_season")
-    if season == "summer" and plant.get("watering_interval_summer") is not None:
-        value = plant["watering_interval_summer"]
-        return value if isinstance(value, int) else None
-    if season == "winter" and plant.get("watering_interval_winter") is not None:
-        value = plant["watering_interval_winter"]
-        return value if isinstance(value, int) else None
-    value = plant.get("watering_interval_days")
-    return value if isinstance(value, int) else None
+    return _active_watering_interval_range(plant)[0]
 
+
+def _active_watering_interval_range(plant: dict[str, Any]) -> tuple[int, int]:
+    return watering_interval_range(plant, plant.get("current_season"))

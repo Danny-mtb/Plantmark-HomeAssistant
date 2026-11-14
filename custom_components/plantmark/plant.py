@@ -11,17 +11,64 @@ from homeassistant.util import dt as dt_util
 
 from .const import DEFAULT_WATERING_INTERVAL
 
+SEASONS = ("spring", "summer", "autumn", "winter")
+
+_API_TEXT_FIELDS = (
+    "api_provider",
+    "api_last_synced",
+    "common_name",
+    "family",
+    "plant_type",
+    "cycle",
+    "watering",
+    "care_level",
+    "description",
+    "image_license_name",
+    "image_license_url",
+)
+_API_LIST_FIELDS = ("other_names", "origin", "sunlight", "soil")
+_API_BOOL_FIELDS = ("indoor", "poisonous_to_humans", "poisonous_to_pets")
+_PLANT_TEXT_FIELDS = (
+    "notification_target",
+    "last_notification_for",
+    "last_moisture_adjustment",
+)
+_PLANT_BOOL_FIELDS = (
+    "seasonal_watering_enabled",
+    "moisture_control_enabled",
+    "watering_reminder_enabled",
+)
+_PLANT_INT_FIELDS = (
+    "watering_interval_min_days",
+    "watering_interval_max_days",
+    "moisture_threshold_percent",
+    "moisture_delay_days",
+)
+_WATERING_RANGE_FIELDS = (
+    "watering_interval_days",
+    "watering_interval_min_days",
+    "watering_interval_max_days",
+    "seasonal_watering_enabled",
+    *(
+        f"watering_interval_{season}_{suffix}"
+        for season in SEASONS
+        for suffix in ("min_days", "max_days")
+    ),
+)
+
 
 def new_plant(values: dict[str, Any]) -> dict[str, Any]:
     """Create a normalized plant with its first watering schedule."""
     now = dt_util.now()
-    interval = int(values["watering_interval_days"])
+    cleaned = _clean_values(values)
+    minimum, maximum = watering_interval_range(cleaned, season_for_month(now.month))
     return {
         "id": uuid4().hex,
-        **_clean_values(values),
+        **cleaned,
         "last_watered": now.isoformat(),
-        "next_watering": (now + timedelta(days=interval)).isoformat(),
-        "current_season": _current_season(now.month),
+        "next_watering": (now + timedelta(days=minimum)).isoformat(),
+        "next_watering_end": (now + timedelta(days=maximum)).isoformat(),
+        "current_season": season_for_month(now.month),
     }
 
 
@@ -33,10 +80,23 @@ def updated_plant(plant: dict[str, Any], values: dict[str, Any]) -> dict[str, An
             cleaned.pop(panel_field, None)
     updated = {**plant, **cleaned}
     last_watered = dt_util.parse_datetime(str(updated.get("last_watered", "")))
-    if last_watered is not None:
-        updated["next_watering"] = (
-            last_watered + timedelta(days=int(updated["watering_interval_days"]))
-        ).isoformat()
+    if last_watered is not None and any(
+        field in cleaned and cleaned[field] != plant.get(field)
+        for field in _WATERING_RANGE_FIELDS
+    ):
+        minimum, maximum = watering_interval_range(
+            updated, season_for_month(last_watered.month)
+        )
+        next_watering = (last_watered + timedelta(days=minimum)).isoformat()
+        next_watering_end = (last_watered + timedelta(days=maximum)).isoformat()
+        schedule_changed = next_watering != plant.get(
+            "next_watering"
+        ) or next_watering_end != plant.get("next_watering_end")
+        updated["next_watering"] = next_watering
+        updated["next_watering_end"] = next_watering_end
+        if schedule_changed:
+            updated["last_notification_for"] = None
+            updated["last_moisture_adjustment"] = None
     return updated
 
 
@@ -59,8 +119,18 @@ def parse_import(raw: str) -> list[dict[str, Any]]:
             interval = DEFAULT_WATERING_INTERVAL
         now = dt_util.now()
         last = _valid_datetime(source.get("last_watered")) or now
+        normalized_values = {
+            "watering_interval_days": interval,
+            **_copy_schedule_values(source),
+        }
+        minimum, maximum = watering_interval_range(
+            normalized_values, season_for_month(last.month)
+        )
         next_watering = _valid_datetime(source.get("next_watering")) or (
-            last + timedelta(days=interval)
+            last + timedelta(days=minimum)
+        )
+        next_watering_end = _valid_datetime(source.get("next_watering_end")) or (
+            last + timedelta(days=maximum)
         )
         plants.append(
             {
@@ -78,11 +148,14 @@ def parse_import(raw: str) -> list[dict[str, Any]]:
                 "watering_interval_days": interval,
                 "last_watered": last.isoformat(),
                 "next_watering": next_watering.isoformat(),
+                "next_watering_end": next_watering_end.isoformat(),
                 "current_season": source.get("current_season")
-                or _current_season(now.month),
+                or season_for_month(now.month),
                 "is_toxic_to_cats": bool(source.get("is_toxic_to_cats", False)),
                 "is_toxic_to_dogs": bool(source.get("is_toxic_to_dogs", False)),
                 "notes": _optional_text(source.get("notes")),
+                **_copy_api_values(source),
+                **_copy_schedule_values(source),
             }
         )
     if not plants:
@@ -91,7 +164,7 @@ def parse_import(raw: str) -> list[dict[str, Any]]:
 
 
 def _clean_values(values: dict[str, Any]) -> dict[str, Any]:
-    return {
+    cleaned = {
         "name": str(values["name"]).strip(),
         "scientific_name": str(values.get("scientific_name", "")).strip() or None,
         "location": str(values.get("location", "")).strip() or None,
@@ -104,6 +177,86 @@ def _clean_values(values: dict[str, Any]) -> dict[str, Any]:
         "is_toxic_to_dogs": bool(values.get("is_toxic_to_dogs", False)),
         "notes": str(values.get("notes", "")).strip() or None,
     }
+    cleaned.update(_copy_api_values(values))
+    cleaned.update(_copy_schedule_values(values))
+    return cleaned
+
+
+def watering_interval_range(
+    plant: dict[str, Any], season: str | None = None
+) -> tuple[int, int]:
+    """Return the active inclusive watering interval in days."""
+    fallback = _bounded_int(
+        plant.get("watering_interval_days"), DEFAULT_WATERING_INTERVAL, 1, 365
+    )
+    default_minimum = _bounded_int(
+        plant.get("watering_interval_min_days"), fallback, 1, 365
+    )
+    default_maximum = _bounded_int(
+        plant.get("watering_interval_max_days"), default_minimum, 1, 365
+    )
+    if plant.get("seasonal_watering_enabled") and season in SEASONS:
+        prefix = f"watering_interval_{season}"
+        minimum = _bounded_int(plant.get(f"{prefix}_min_days"), default_minimum, 1, 365)
+        maximum = _bounded_int(plant.get(f"{prefix}_max_days"), default_maximum, 1, 365)
+    else:
+        minimum, maximum = default_minimum, default_maximum
+    return minimum, max(minimum, maximum)
+
+
+def season_for_month(month: int) -> str:
+    """Return the meteorological season for the northern hemisphere."""
+    if month in (3, 4, 5):
+        return "spring"
+    if month in (6, 7, 8):
+        return "summer"
+    if month in (9, 10, 11):
+        return "autumn"
+    return "winter"
+
+
+def _copy_schedule_values(values: dict[str, Any]) -> dict[str, Any]:
+    copied: dict[str, Any] = {}
+    for field in _PLANT_TEXT_FIELDS:
+        if field in values:
+            copied[field] = _optional_text(values.get(field))
+    for field in _PLANT_BOOL_FIELDS:
+        if field in values:
+            copied[field] = bool(values.get(field))
+    for field in _PLANT_INT_FIELDS:
+        if field in values:
+            copied[field] = _optional_int(values.get(field))
+    for season in SEASONS:
+        for suffix in ("min_days", "max_days"):
+            field = f"watering_interval_{season}_{suffix}"
+            if field in values:
+                copied[field] = _optional_int(values.get(field))
+    return copied
+
+
+def _copy_api_values(values: dict[str, Any]) -> dict[str, Any]:
+    copied: dict[str, Any] = {}
+    if "perenual_id" in values:
+        try:
+            copied["perenual_id"] = int(values["perenual_id"])
+        except (TypeError, ValueError):
+            copied["perenual_id"] = None
+    for field in _API_TEXT_FIELDS:
+        if field in values:
+            copied[field] = _optional_text(values.get(field))
+    for field in _API_LIST_FIELDS:
+        if field in values:
+            source = values.get(field)
+            copied[field] = (
+                [text for item in source if (text := _optional_text(item))]
+                if isinstance(source, list)
+                else []
+            )
+    for field in _API_BOOL_FIELDS:
+        if field in values:
+            value = values.get(field)
+            copied[field] = value if isinstance(value, bool) else None
+    return copied
 
 
 def _valid_datetime(value: Any) -> datetime | None:
@@ -121,5 +274,15 @@ def _optional_text(value: Any) -> str | None:
     return str(value).strip() or None
 
 
-def _current_season(month: int) -> str:
-    return "summer" if 4 <= month <= 9 else "winter"
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    parsed = _optional_int(value)
+    if parsed is None:
+        return default
+    return max(minimum, min(maximum, parsed))

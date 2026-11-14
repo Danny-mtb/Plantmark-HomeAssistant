@@ -19,8 +19,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 
+from .api import PerenualClient, clear_perenual_client, get_perenual_client
 from .const import (
     CONF_DEFAULT_WATER_AMOUNT,
+    CONF_PERENUAL_API_KEY,
     CONF_PLANTS,
     DEFAULT_WATER_AMOUNT,
     DOMAIN,
@@ -72,6 +74,8 @@ async def async_setup_panel(hass: HomeAssistant) -> None:
             websocket_water,
             websocket_import,
             websocket_settings,
+            websocket_api_search,
+            websocket_api_details,
         ):
             websocket_api.async_register_command(hass, command)
         domain_data[_WEBSOCKET_REGISTERED] = True
@@ -130,10 +134,12 @@ def websocket_list(
         {
             "plants": deepcopy(list(entry.options.get(CONF_PLANTS, []))),
             "areas": areas,
+            "notification_targets": _notification_targets(hass),
             "settings": {
                 CONF_DEFAULT_WATER_AMOUNT: entry.options.get(
                     CONF_DEFAULT_WATER_AMOUNT, DEFAULT_WATER_AMOUNT
-                )
+                ),
+                "perenual_configured": bool(entry.data.get(CONF_PERENUAL_API_KEY)),
             },
         },
     )
@@ -178,10 +184,14 @@ async def websocket_save(
     if msg.get("remove_image"):
         await _async_remove_image(hass, str(plant["id"]))
         plant["image_url"] = None
+        plant["image_license_name"] = None
+        plant["image_license_url"] = None
     elif image_data := msg.get("image_data"):
         plant["image_url"] = await _async_store_image(
             hass, str(plant["id"]), image_data
         )
+        plant["image_license_name"] = None
+        plant["image_license_url"] = None
 
     _save_plants(hass, entry, plants)
     _sync_device(hass, entry, plant)
@@ -292,6 +302,8 @@ async def websocket_import(
         vol.Required("default_water_amount_ml"): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=10000)
         ),
+        vol.Optional("perenual_api_key"): vol.All(str, vol.Strip, vol.Length(max=512)),
+        vol.Optional("remove_perenual_api_key", default=False): bool,
     }
 )
 @websocket_api.require_admin
@@ -305,8 +317,57 @@ def websocket_settings(
     entry = _config_entry(hass)
     options = dict(entry.options)
     options[CONF_DEFAULT_WATER_AMOUNT] = msg["default_water_amount_ml"]
-    hass.config_entries.async_update_entry(entry, options=options)
-    connection.send_result(msg["id"])
+    data = dict(entry.data)
+    key_changed = False
+    if msg.get("remove_perenual_api_key"):
+        key_changed = data.pop(CONF_PERENUAL_API_KEY, None) is not None
+    elif api_key := msg.get("perenual_api_key"):
+        key_changed = data.get(CONF_PERENUAL_API_KEY) != api_key
+        data[CONF_PERENUAL_API_KEY] = api_key
+    if key_changed:
+        clear_perenual_client(hass)
+    hass.config_entries.async_update_entry(entry, data=data, options=options)
+    connection.send_result(
+        msg["id"], {"perenual_configured": bool(data.get(CONF_PERENUAL_API_KEY))}
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "plantmark/api/search",
+        vol.Required("query"): vol.All(str, vol.Strip, vol.Length(min=2, max=100)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def websocket_api_search(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Search Perenual without exposing its API key to the browser."""
+    client = _perenual_client(hass, _config_entry(hass))
+    results = await client.async_search(msg["query"])
+    connection.send_result(msg["id"], {"results": results})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "plantmark/api/details",
+        vol.Required("species_id"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def websocket_api_details(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return normalized care data for one Perenual species."""
+    client = _perenual_client(hass, _config_entry(hass))
+    details = await client.async_details(msg["species_id"])
+    connection.send_result(msg["id"], {"plant": details})
 
 
 def _config_entry(hass: HomeAssistant) -> ConfigEntry:
@@ -314,6 +375,15 @@ def _config_entry(hass: HomeAssistant) -> ConfigEntry:
     if not entries:
         raise HomeAssistantError("Plantmark is not configured")
     return entries[0]
+
+
+def _perenual_client(hass: HomeAssistant, entry: ConfigEntry) -> PerenualClient:
+    api_key = str(entry.data.get(CONF_PERENUAL_API_KEY) or "").strip()
+    if not api_key:
+        raise HomeAssistantError(
+            "Configure a personal Perenual API key in Plantmark settings first"
+        )
+    return get_perenual_client(hass, api_key)
 
 
 def _validate_plant_values(hass: HomeAssistant, values: dict[str, Any]) -> None:
@@ -331,11 +401,113 @@ def _validate_plant_values(hass: HomeAssistant, values: dict[str, Any]) -> None:
     if area_id and ar.async_get(hass).async_get_area(area_id) is None:
         raise HomeAssistantError("Selected Home Assistant area no longer exists")
 
+    _validate_watering_ranges(values)
+
     sensor = str(values.get("water_sensor_entity_id") or "")
-    if sensor and not sensor.startswith(("sensor.", "binary_sensor.")):
-        raise HomeAssistantError(
-            "Water sensor must be a sensor or binary sensor entity"
+    if sensor:
+        state = hass.states.get(sensor)
+        if state is None or not _is_moisture_sensor(state):
+            raise HomeAssistantError(
+                "Water sensor must be a numeric moisture or humidity sensor"
+            )
+    if values.get("moisture_control_enabled") and not sensor:
+        raise HomeAssistantError("Select a moisture sensor before enabling control")
+    threshold = _integer(values.get("moisture_threshold_percent"), 35)
+    if not 0 <= threshold <= 100:
+        raise HomeAssistantError("Moisture threshold must be between 0 and 100")
+    delay = _integer(values.get("moisture_delay_days"), 1)
+    if not 1 <= delay <= 30:
+        raise HomeAssistantError("Moisture delay must be between 1 and 30 days")
+
+    target = str(values.get("notification_target") or "")
+    if values.get("watering_reminder_enabled"):
+        if not target:
+            raise HomeAssistantError("Select a notification target for reminders")
+        valid_targets = {item["id"] for item in _notification_targets(hass)}
+        if target not in valid_targets:
+            raise HomeAssistantError("The selected notification target is unavailable")
+
+
+def _validate_watering_ranges(values: dict[str, Any]) -> None:
+    ranges = [("watering_interval_min_days", "watering_interval_max_days")]
+    if values.get("seasonal_watering_enabled"):
+        ranges.extend(
+            (
+                f"watering_interval_{season}_min_days",
+                f"watering_interval_{season}_max_days",
+            )
+            for season in ("spring", "summer", "autumn", "winter")
         )
+    fallback = _integer(values.get("watering_interval_days"), 7)
+    for minimum_field, maximum_field in ranges:
+        minimum = _integer(values.get(minimum_field), fallback)
+        maximum = _integer(values.get(maximum_field), minimum)
+        if not 1 <= minimum <= maximum <= 365:
+            raise HomeAssistantError(
+                "Watering intervals must be between 1 and 365 days and minimum must not exceed maximum"
+            )
+
+
+def _integer(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _is_moisture_sensor(state: Any) -> bool:
+    if not str(state.entity_id).startswith("sensor."):
+        return False
+    device_class = str(state.attributes.get("device_class") or "").casefold()
+    if device_class == "moisture":
+        return True
+    unit = str(state.attributes.get("unit_of_measurement") or "").strip()
+    searchable = " ".join(
+        (
+            str(state.entity_id),
+            str(state.attributes.get("friendly_name") or ""),
+        )
+    ).casefold()
+    plant_context = any(
+        word in searchable
+        for word in (
+            "moisture",
+            "boden",
+            "soil",
+            "plant",
+            "pflanze",
+            "flower",
+            "erde",
+        )
+    )
+    return plant_context and (device_class == "humidity" or unit == "%")
+
+
+def _notification_targets(hass: HomeAssistant) -> list[dict[str, str]]:
+    targets = [
+        {
+            "id": "persistent_notification",
+            "name": "Home Assistant notification",
+        }
+    ]
+    targets.extend(
+        {
+            "id": f"entity:{state.entity_id}",
+            "name": str(state.attributes.get("friendly_name") or state.entity_id),
+        }
+        for state in hass.states.async_all({"notify"})
+    )
+    services = hass.services.async_services().get("notify", {})
+    targets.extend(
+        {
+            "id": f"service:notify.{service}",
+            "name": f"notify.{service}",
+        }
+        for service in sorted(services)
+        if service not in {"send_message", "persistent_notification"}
+    )
+    unique: dict[str, dict[str, str]] = {target["id"]: target for target in targets}
+    return list(unique.values())
 
 
 @callback

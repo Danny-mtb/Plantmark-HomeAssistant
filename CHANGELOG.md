@@ -3,6 +3,26 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.2.0 - 2026-11-14
+
+- Add an optional Perenual plant database integration using each user's own API
+  key stored in the Home Assistant config entry and redacted from diagnostics.
+- Add plant search and selective import of botanical names, watering guidance,
+  sunlight, soil, origin, care level, toxicity, descriptions and images.
+- Cache searches and plant details locally to reduce API usage and handle
+  invalid keys, rate limits and temporary network failures safely.
+- Preserve areas, sensors, notes and locally uploaded images when enriching an
+  existing plant, and display source image licensing where available.
+- Add watering windows with minimum and maximum days plus separate spring,
+  summer, autumn and winter schedules.
+- Filter the plant sensor selector to relevant soil-moisture sensors and
+  optionally postpone a due watering window while the configured sensor remains
+  above its moisture threshold.
+- Add one-time watering reminders using Home Assistant persistent notifications,
+  notify entities or existing legacy notify services such as Pushover.
+- Show watering windows in the calendar with a watering icon and localized
+  event titles.
+
 ## 1.1.0 - 2026-11-14
 
 - Add a responsive Plantmark sidebar panel for viewing and managing all plants.

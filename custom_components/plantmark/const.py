@@ -11,6 +11,7 @@ DOMAIN: Final = "plantmark"
 CONF_LIBRARY_NAME: Final = "library_name"
 CONF_PLANTS: Final = "plants"
 CONF_DEFAULT_WATER_AMOUNT: Final = "default_water_amount_ml"
+CONF_PERENUAL_API_KEY: Final = "perenual_api_key"
 
 DEFAULT_LIBRARY_NAME: Final = "Plantmark"
 DEFAULT_WATERING_INTERVAL: Final = 7

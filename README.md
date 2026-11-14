@@ -17,10 +17,21 @@ eine eigene, responsive Plantmark-Seite in der Home-Assistant-Seitenleiste.
   Pflanzengerät wird automatisch diesem Bereich zugeordnet.
 - Optionaler Wasser- oder Bodenfeuchtesensor pro Pflanze mit Live-Anzeige des
   Sensorwerts in der Übersicht.
+- Auf Bodenfeuchte eingegrenzte Sensorauswahl und optionale automatische
+  Verschiebung des Gießzeitraums, solange die Erde noch feucht genug ist.
+- Gießzeiträume wie **7–10 Tage** sowie eigene Zeiträume für Frühling, Sommer,
+  Herbst und Winter.
+- Ein Gießkalender mit eigenem Symbol und mehrtägigen Gießfenstern.
+- Einmalige Gießerinnerungen über die Home-Assistant-Benachrichtigungszentrale,
+  moderne `notify`-Entitäten oder vorhandene `notify.*`-Dienste wie Pushover.
+- Optionale Suche in der Perenual-Pflanzendatenbank. Wissenschaftlicher Name,
+  Gießempfehlung, Licht, Erde, Herkunft, Pflegegrad, Giftigkeit, Beschreibung
+  und Bild können direkt übernommen werden.
 - Jede Pflanze wird weiterhin als eigenes Home-Assistant-Gerät mit nativen
   Entitäten für Automationen angelegt.
-- Sensoren für das letzte und nächste Gießen, Gießintervall, verbleibende Tage,
-  Saison und letzte Gießmenge.
+- Sensoren für das letzte Gießen, Beginn und Ende des nächsten Gießfensters,
+  minimales und maximales Gießintervall, verbleibende Tage, Saison und letzte
+  Gießmenge.
 - Warnsensoren für fälliges Gießen sowie Giftigkeit für Katzen und Hunde.
 - Nativer **Gießen**-Button pro Pflanze, geeignet für Dashboards und Automationen.
 - Gemeinsamer Gießkalender mit allen bevorstehenden Terminen.
@@ -58,8 +69,51 @@ Alle Verwaltungsfunktionen befinden sich im **Plantmark-Tab der Seitenleiste**:
   einer API-Antwort im Format `{ "plants": [...] }`.
 - **Einstellungen** – legt die standardmäßig erfasste Gießmenge fest.
 
+Im Pflanzendialog kann der allgemeine Gießzeitraum über einen frühesten und
+spätesten Tag festgelegt werden. Optional lassen sich abweichende Zeiträume für
+alle vier Jahreszeiten aktivieren. Plantmark verwendet meteorologische
+Jahreszeiten der Nordhalbkugel: Frühling März–Mai, Sommer Juni–August, Herbst
+September–November und Winter Dezember–Februar.
+
+Für die feuchtigkeitsabhängige Steuerung zeigt Plantmark nur Sensoren mit der
+Home-Assistant-Geräteklasse `moisture` oder eindeutig pflanzenbezogene
+Prozent-/Feuchtesensoren an. Ist der Sensor beim Beginn des Gießzeitraums noch
+oberhalb des eingestellten Grenzwerts, wird das gesamte Fenster um die
+konfigurierte Anzahl Tage verschoben. Die Prüfung erfolgt spätestens alle 15
+Minuten.
+
+Gießerinnerungen werden einmal je Gießfenster versendet. Als Ziel stehen die
+Home-Assistant-Benachrichtigungszentrale, moderne `notify`-Entitäten und
+vorhandene klassische Notify-Dienste zur Verfügung. Plantmark benötigt dafür
+keinen externen Benachrichtigungsdienst; Pushover oder die Companion App können
+verwendet werden, wenn sie bereits in Home Assistant eingerichtet sind. Eine
+persistente Home-Assistant-Erinnerung wird beim Erfassen des Gießens automatisch
+geschlossen.
+
 Der Gerätebereich von Home Assistant zeigt weiterhin die erzeugten Entitäten,
 ist aber nicht mehr für die Plantmark-Verwaltung erforderlich.
+
+## Optionale Perenual-Pflanzendatenbank
+
+Plantmark funktioniert vollständig ohne Cloud-Dienst. Für die automatische
+Pflanzensuche kann zusätzlich ein persönlicher Perenual-API-Key eingerichtet
+werden:
+
+1. Erstelle bei [Perenual](https://www.perenual.com/docs/api) einen eigenen
+   API-Key.
+2. Öffne in der Plantmark-Seitenleiste **Einstellungen**.
+3. Trage den Schlüssel unter **Perenual-Pflanzendatenbank** ein.
+4. Öffne **Pflanze hinzufügen** oder bearbeite eine vorhandene Pflanze.
+5. Suche nach einem allgemeinen oder wissenschaftlichen Pflanzennamen und
+   wähle **Daten übernehmen**.
+
+Der API-Key wird ausschließlich im Home-Assistant-Konfigurationseintrag
+gespeichert und niemals an die Plantmark-Browseroberfläche zurückgesendet. Die
+Suche wird nur auf ausdrückliche Benutzeraktion ausgeführt. Suchergebnisse
+werden 30 Minuten, Pflanzendetails 24 Stunden im Arbeitsspeicher
+zwischengespeichert. Bereich, Wassersensor, Notizen und lokal hochgeladene
+Bilder bleiben bei der Datenübernahme erhalten. Von Perenual gelieferte Bilder
+werden zusammen mit der vorhandenen Lizenzangabe angezeigt.
 
 ## Veröffentlichen
 
@@ -82,9 +136,13 @@ Das Repository enthält:
 
 ## Datenschutz
 
-Plantmark arbeitet vollständig lokal. Es werden keine Daten an externe Dienste
-übertragen. Hochgeladene Pflanzenbilder werden unter `www/plantmark` innerhalb
-deiner Home-Assistant-Konfiguration gespeichert. Wie andere Dateien aus dem
+Ohne die optionale Perenual-Anbindung arbeitet Plantmark vollständig lokal.
+Hochgeladene Pflanzenbilder werden unter `www/plantmark` innerhalb deiner
+Home-Assistant-Konfiguration gespeichert. Wie andere Dateien aus dem
 Home-Assistant-`www`-Verzeichnis werden sie über eine lokale statische URL
-bereitgestellt.
+bereitgestellt. Wenn die optionale Perenual-Anbindung aktiviert ist, werden nur
+vom Benutzer eingegebene Pflanzensuchbegriffe und ausgewählte Pflanzen-IDs an
+Perenual übertragen. Zur Anzeige eines übernommenen API-Bilds lädt der Browser
+außerdem die von Perenual bereitgestellte externe Bild-URL. Es werden keine
+Home-Assistant-Geräte-, Bereichs- oder Sensordaten übermittelt.
 

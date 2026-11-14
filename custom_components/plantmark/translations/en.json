@@ -22,11 +22,18 @@
       "last_watered": {"name": "Last watered"},
       "last_watering_amount": {"name": "Last watering amount"},
       "next_watering": {"name": "Next watering"},
+      "watering_window_end": {"name": "Watering window end"},
       "season": {
         "name": "Season",
-        "state": {"summer": "Summer", "winter": "Winter"}
+        "state": {
+          "spring": "Spring",
+          "summer": "Summer",
+          "autumn": "Autumn",
+          "winter": "Winter"
+        }
       },
-      "watering_interval": {"name": "Watering interval"}
+      "watering_interval": {"name": "Earliest watering interval"},
+      "watering_interval_max": {"name": "Latest watering interval"}
     }
   },
   "options": {

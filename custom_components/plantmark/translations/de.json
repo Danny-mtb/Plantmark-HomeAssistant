@@ -24,11 +24,18 @@
       "last_watered": {"name": "Zuletzt gegossen"},
       "last_watering_amount": {"name": "Letzte Gießmenge"},
       "next_watering": {"name": "Nächstes Gießen"},
+      "watering_window_end": {"name": "Ende des Gießzeitraums"},
       "season": {
         "name": "Saison",
-        "state": {"summer": "Sommer", "winter": "Winter"}
+        "state": {
+          "spring": "Frühling",
+          "summer": "Sommer",
+          "autumn": "Herbst",
+          "winter": "Winter"
+        }
       },
-      "watering_interval": {"name": "Gießintervall"}
+      "watering_interval": {"name": "Frühestes Gießintervall"},
+      "watering_interval_max": {"name": "Spätestes Gießintervall"}
     }
   },
   "options": {

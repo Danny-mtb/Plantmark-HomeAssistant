@@ -12,6 +12,8 @@ TO_REDACT = {
     "image_url",
     "location",
     "notes",
+    "notification_target",
+    "perenual_api_key",
     "apartment_name",
     "room_name",
     "water_sensor_entity_id",
