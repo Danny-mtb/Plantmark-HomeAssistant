@@ -20,6 +20,8 @@ jobs:
           python-version: "3.13"
       - name: Compile integration
         run: python -m compileall -q custom_components/plantmark
+      - name: Check sidebar JavaScript
+        run: node --check custom_components/plantmark/frontend/plantmark-panel.js
 
   hassfest:
     runs-on: ubuntu-latest

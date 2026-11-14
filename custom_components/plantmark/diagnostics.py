@@ -8,11 +8,13 @@ from homeassistant.core import HomeAssistant
 from . import PlantmarkConfigEntry
 
 TO_REDACT = {
+    "area_id",
     "image_url",
     "location",
     "notes",
     "apartment_name",
     "room_name",
+    "water_sensor_entity_id",
 }
 
 

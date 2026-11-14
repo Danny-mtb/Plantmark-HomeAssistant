@@ -3,13 +3,22 @@
 Plantmark ist eine vollständig native Home-Assistant-Integration zur Verwaltung
 und Pflege von Zimmerpflanzen. Sie benötigt keinen separaten Docker-Container,
 keine Datenbank und keinen Cloud-Dienst. Alle Pflanzendaten werden im
-Home-Assistant-Konfigurationseintrag gespeichert.
+Home-Assistant-Konfigurationseintrag gespeichert. Die Verwaltung erfolgt über
+eine eigene, responsive Plantmark-Seite in der Home-Assistant-Seitenleiste.
 
 ## Funktionen
 
-- Jede Pflanze wird als eigenes Home-Assistant-Gerät angelegt.
-- Pflanzen lassen sich direkt über **Einstellungen → Geräte & Dienste →
-  Plantmark → Konfigurieren** hinzufügen, bearbeiten und entfernen.
+- Eigener **Plantmark-Tab in der Seitenleiste** mit Kartenansicht für alle
+  Pflanzen, Bilder, Gießtermine, Warnungen und Sensorwerte.
+- Pflanzen direkt im Plantmark-Tab hinzufügen, bearbeiten, gießen und löschen.
+- Direkter Upload von JPEG-, PNG- und WebP-Bildern. Die Bilder werden lokal in
+  Home Assistant gespeichert und vor dem Upload automatisch verkleinert.
+- Auswahl eines vorhandenen Home-Assistant-Bereichs. Das zugehörige
+  Pflanzengerät wird automatisch diesem Bereich zugeordnet.
+- Optionaler Wasser- oder Bodenfeuchtesensor pro Pflanze mit Live-Anzeige des
+  Sensorwerts in der Übersicht.
+- Jede Pflanze wird weiterhin als eigenes Home-Assistant-Gerät mit nativen
+  Entitäten für Automationen angelegt.
 - Sensoren für das letzte und nächste Gießen, Gießintervall, verbleibende Tage,
   Saison und letzte Gießmenge.
 - Warnsensoren für fälliges Gießen sowie Giftigkeit für Katzen und Hunde.
@@ -28,7 +37,8 @@ Home-Assistant-Konfigurationseintrag gespeichert.
 4. Öffne **Einstellungen → Geräte & Dienste → Integration hinzufügen** und
    wähle **Plantmark**.
 5. Vergib einen Namen für deine Pflanzenbibliothek.
-6. Öffne anschließend **Konfigurieren**, um die erste Pflanze hinzuzufügen.
+6. Öffne anschließend den neuen Eintrag **Plantmark** in der Seitenleiste und
+   füge dort deine erste Pflanze hinzu.
 
 Für eine manuelle Installation kopierst du
 `custom_components/plantmark` nach
@@ -37,17 +47,19 @@ Assistant neu.
 
 ## Pflanzen verwalten
 
-Unter **Plantmark → Konfigurieren** stehen folgende Aktionen bereit:
+Alle Verwaltungsfunktionen befinden sich im **Plantmark-Tab der Seitenleiste**:
 
-- **Pflanze hinzufügen** – legt ein neues Gerät samt Entitäten an.
-- **Pflanze bearbeiten** – ändert Name, Standort, Bild, Intervall und Warnungen.
-- **Pflanze entfernen** – entfernt Pflanze und Entitäten.
-- **Pflanzen aus JSON importieren** – übernimmt frühere Plantmark-Daten.
+- **Pflanze hinzufügen** – Name, wissenschaftlicher Name, Gießintervall,
+  Home-Assistant-Bereich, Bild, Wassersensor, Notizen und Giftigkeitswarnungen.
+- **Bearbeiten** – alle Pflanzendaten sowie Bereich, Bild und Sensor ändern.
+- **Jetzt gießen** – aktualisiert den letzten und nächsten Gießtermin sofort.
+- **Löschen** – entfernt die Pflanze, das lokale Bild und ihre Entitäten.
+- **Importieren** – übernimmt frühere Plantmark-Daten aus einer JSON-Liste oder
+  einer API-Antwort im Format `{ "plants": [...] }`.
 - **Einstellungen** – legt die standardmäßig erfasste Gießmenge fest.
 
-Nach Änderungen lädt Home Assistant die Integration automatisch neu. Beim
-Drücken des Gießen-Buttons werden `last_watered` und `next_watering` sofort
-aktualisiert und dauerhaft im Konfigurationseintrag gespeichert.
+Der Gerätebereich von Home Assistant zeigt weiterhin die erzeugten Entitäten,
+ist aber nicht mehr für die Plantmark-Verwaltung erforderlich.
 
 ## Veröffentlichen
 
@@ -71,6 +83,8 @@ Das Repository enthält:
 ## Datenschutz
 
 Plantmark arbeitet vollständig lokal. Es werden keine Daten an externe Dienste
-übertragen. Externe Bild-URLs werden nur dann durch Home Assistant bzw. den
-Browser geladen, wenn du selbst eine solche URL bei einer Pflanze hinterlegst.
+übertragen. Hochgeladene Pflanzenbilder werden unter `www/plantmark` innerhalb
+deiner Home-Assistant-Konfiguration gespeichert. Wie andere Dateien aus dem
+Home-Assistant-`www`-Verzeichnis werden sie über eine lokale statische URL
+bereitgestellt.
 

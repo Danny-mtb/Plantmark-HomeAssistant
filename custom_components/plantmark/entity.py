@@ -54,6 +54,5 @@ class PlantmarkEntity(CoordinatorEntity[PlantmarkDataUpdateCoordinator]):
             manufacturer="Plantmark",
             model=str(model),
             name=str(plant.get("name") or self.plant_id),
-            suggested_area=plant.get("location"),
         )
 

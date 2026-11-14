@@ -18,10 +18,26 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
-    async_add_entities(
-        PlantmarkWaterButton(coordinator, plant_id)
-        for plant_id in sorted(coordinator.data)
-    )
+    entities: dict[str, PlantmarkWaterButton] = {}
+
+    def _sync_plants() -> None:
+        current_ids = set(coordinator.data)
+        for plant_id in set(entities) - current_ids:
+            entity = entities.pop(plant_id)
+            hass.async_create_task(
+                entity.async_remove(), f"Remove Plantmark button {entity.entity_id}"
+            )
+
+        new_entities = [
+            PlantmarkWaterButton(coordinator, plant_id)
+            for plant_id in sorted(current_ids - set(entities))
+        ]
+        entities.update({entity.plant_id: entity for entity in new_entities})
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _sync_plants()
+    entry.async_on_unload(coordinator.async_add_listener(_sync_plants))
 
 
 class PlantmarkWaterButton(PlantmarkEntity, ButtonEntity):

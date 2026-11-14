@@ -57,21 +57,29 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
-    known: set[str] = set()
+    entities: dict[str, list[PlantmarkBinarySensor]] = {}
 
-    def _add_new_plants() -> None:
-        new_ids = set(coordinator.data) - known
-        if not new_ids:
-            return
-        async_add_entities(
+    def _sync_plants() -> None:
+        current_ids = set(coordinator.data)
+        for plant_id in set(entities) - current_ids:
+            for entity in entities.pop(plant_id):
+                hass.async_create_task(
+                    entity.async_remove(),
+                    f"Remove Plantmark binary sensor {entity.entity_id}",
+                )
+
+        new_entities = [
             PlantmarkBinarySensor(coordinator, plant_id, description)
-            for plant_id in sorted(new_ids)
+            for plant_id in sorted(current_ids - set(entities))
             for description in BINARY_SENSORS
-        )
-        known.update(new_ids)
+        ]
+        for entity in new_entities:
+            entities.setdefault(entity.plant_id, []).append(entity)
+        if new_entities:
+            async_add_entities(new_entities)
 
-    _add_new_plants()
-    entry.async_on_unload(coordinator.async_add_listener(_add_new_plants))
+    _sync_plants()
+    entry.async_on_unload(coordinator.async_add_listener(_sync_plants))
 
 
 class PlantmarkBinarySensor(PlantmarkEntity, BinarySensorEntity):

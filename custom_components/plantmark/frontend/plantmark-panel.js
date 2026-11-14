@@ -1,0 +1,496 @@
+const TEXT = {
+  de: {
+    title: "Meine Pflanzen",
+    subtitle: "Pflege, Bilder und Sensoren an einem Ort",
+    add: "Pflanze hinzufügen",
+    import: "Importieren",
+    settings: "Einstellungen",
+    total: "Pflanzen",
+    due: "Gießen fällig",
+    sensors: "Sensoren verbunden",
+    emptyTitle: "Noch keine Pflanzen",
+    emptyText: "Lege deine erste Pflanze an und Plantmark erinnert dich ans Gießen.",
+    edit: "Bearbeiten",
+    delete: "Löschen",
+    water: "Jetzt gießen",
+    watering: "Wird gespeichert …",
+    lastWatered: "Zuletzt gegossen",
+    nextWatering: "Nächstes Gießen",
+    interval: "Gießintervall",
+    days: "Tage",
+    area: "Bereich",
+    noArea: "Kein Bereich",
+    waterSensor: "Wassersensor / Bodenfeuchte",
+    noSensor: "Kein Sensor",
+    unavailable: "Nicht verfügbar",
+    notes: "Notizen",
+    toxicCats: "Giftig für Katzen",
+    toxicDogs: "Giftig für Hunde",
+    plantName: "Name",
+    scientificName: "Wissenschaftlicher Name",
+    image: "Pflanzenbild",
+    imageHelp: "JPEG, PNG oder WebP. Das Bild wird lokal in Home Assistant gespeichert.",
+    removeImage: "Vorhandenes Bild entfernen",
+    save: "Speichern",
+    cancel: "Abbrechen",
+    addTitle: "Pflanze hinzufügen",
+    editTitle: "Pflanze bearbeiten",
+    confirmDelete: "Diese Pflanze und ihre Home-Assistant-Entitäten wirklich löschen?",
+    saved: "Pflanze gespeichert",
+    deleted: "Pflanze gelöscht",
+    watered: "Gießen wurde gespeichert",
+    loadError: "Plantmark konnte nicht geladen werden",
+    saveError: "Änderung konnte nicht gespeichert werden",
+    importTitle: "Pflanzen importieren",
+    importHelp: "Füge eine JSON-Liste oder eine alte Plantmark-Antwort mit einem plants-Feld ein.",
+    importData: "Plantmark-JSON",
+    imported: "Pflanzen wurden importiert",
+    settingsTitle: "Plantmark-Einstellungen",
+    defaultAmount: "Standard-Gießmenge (ml)",
+    amountHelp: "0 bedeutet, dass keine Gießmenge gespeichert wird.",
+    settingsSaved: "Einstellungen gespeichert",
+    required: "Bitte gib einen Namen ein.",
+    sensorState: "Sensorwert",
+    today: "Heute",
+    overdue: "Überfällig",
+  },
+  en: {
+    title: "My plants",
+    subtitle: "Care, images and sensors in one place",
+    add: "Add plant",
+    import: "Import",
+    settings: "Settings",
+    total: "Plants",
+    due: "Watering due",
+    sensors: "Sensors connected",
+    emptyTitle: "No plants yet",
+    emptyText: "Add your first plant and Plantmark will track its watering schedule.",
+    edit: "Edit",
+    delete: "Delete",
+    water: "Water now",
+    watering: "Saving …",
+    lastWatered: "Last watered",
+    nextWatering: "Next watering",
+    interval: "Watering interval",
+    days: "days",
+    area: "Area",
+    noArea: "No area",
+    waterSensor: "Water sensor / soil moisture",
+    noSensor: "No sensor",
+    unavailable: "Unavailable",
+    notes: "Notes",
+    toxicCats: "Toxic to cats",
+    toxicDogs: "Toxic to dogs",
+    plantName: "Name",
+    scientificName: "Scientific name",
+    image: "Plant image",
+    imageHelp: "JPEG, PNG or WebP. The image is stored locally in Home Assistant.",
+    removeImage: "Remove existing image",
+    save: "Save",
+    cancel: "Cancel",
+    addTitle: "Add plant",
+    editTitle: "Edit plant",
+    confirmDelete: "Really delete this plant and its Home Assistant entities?",
+    saved: "Plant saved",
+    deleted: "Plant deleted",
+    watered: "Watering saved",
+    loadError: "Plantmark could not be loaded",
+    saveError: "The change could not be saved",
+    importTitle: "Import plants",
+    importHelp: "Paste a JSON list or a legacy Plantmark response containing a plants field.",
+    importData: "Plantmark JSON",
+    imported: "Plants imported",
+    settingsTitle: "Plantmark settings",
+    defaultAmount: "Default watering amount (ml)",
+    amountHelp: "Use 0 if no watering amount should be stored.",
+    settingsSaved: "Settings saved",
+    required: "Please enter a name.",
+    sensorState: "Sensor value",
+    today: "Today",
+    overdue: "Overdue",
+  },
+};
+
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+class PlantmarkPanel extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._loaded = false;
+    this._loading = false;
+    this._data = { plants: [], areas: [], settings: {} };
+    this._modal = null;
+    this._pendingImage = null;
+    this._toastTimer = null;
+  }
+
+  set hass(value) {
+    this._hass = value;
+    if (this.isConnected && !this._loaded && !this._loading) this._load();
+    if (this._loaded) this._updateSensorValues();
+  }
+
+  set panel(value) {
+    this._panel = value;
+  }
+
+  connectedCallback() {
+    if (this._hass && !this._loaded && !this._loading) this._load();
+    else this._render();
+  }
+
+  get _language() {
+    return String(this._hass?.language || "en").toLowerCase().startsWith("de")
+      ? "de"
+      : "en";
+  }
+
+  get _t() {
+    return TEXT[this._language];
+  }
+
+  async _load() {
+    this._loading = true;
+    this._render();
+    try {
+      this._data = await this._hass.callWS({ type: "plantmark/list" });
+      this._loaded = true;
+    } catch (error) {
+      this._error = error?.message || this._t.loadError;
+    } finally {
+      this._loading = false;
+      this._render();
+    }
+  }
+
+  _render() {
+    if (!this.shadowRoot) return;
+    const t = this._t;
+    const plants = this._data.plants || [];
+    const due = plants.filter((plant) => this._isDue(plant)).length;
+    const sensors = plants.filter((plant) => plant.water_sensor_entity_id).length;
+
+    this.shadowRoot.innerHTML = `
+      <style>${this._styles()}</style>
+      <div class="page">
+        <header>
+          <div class="heading">
+            <div class="brand"><ha-icon icon="mdi:sprout"></ha-icon></div>
+            <div><h1>${t.title}</h1><p>${t.subtitle}</p></div>
+          </div>
+          <div class="header-actions">
+            <button class="secondary" id="import"><ha-icon icon="mdi:database-import-outline"></ha-icon>${t.import}</button>
+            <button class="secondary" id="settings"><ha-icon icon="mdi:cog-outline"></ha-icon>${t.settings}</button>
+            <button class="primary" id="add"><ha-icon icon="mdi:plus"></ha-icon>${t.add}</button>
+          </div>
+        </header>
+        ${this._error ? `<div class="error"><ha-icon icon="mdi:alert-circle"></ha-icon>${escapeHtml(this._error)}</div>` : ""}
+        ${this._loading ? `<div class="loading"><div class="spinner"></div></div>` : `
+          <section class="stats">
+            ${this._stat("mdi:sprout", plants.length, t.total, "green")}
+            ${this._stat("mdi:watering-can", due, t.due, due ? "blue active" : "blue")}
+            ${this._stat("mdi:access-point", sensors, t.sensors, "purple")}
+          </section>
+          ${plants.length ? `<main class="grid">${plants.map((plant) => this._plantCard(plant)).join("")}</main>` : this._emptyState()}
+        `}
+      </div>
+      <div id="modal-root">${this._modalHtml()}</div>
+      <div class="toast" id="toast"></div>
+    `;
+    this._bindEvents();
+  }
+
+  _stat(icon, value, label, color) {
+    return `<article class="stat"><span class="stat-icon ${color}"><ha-icon icon="${icon}"></ha-icon></span><div><strong>${value}</strong><span>${label}</span></div></article>`;
+  }
+
+  _emptyState() {
+    const t = this._t;
+    return `<section class="empty"><div class="empty-icon"><ha-icon icon="mdi:flower-outline"></ha-icon></div><h2>${t.emptyTitle}</h2><p>${t.emptyText}</p><button class="primary" id="empty-add"><ha-icon icon="mdi:plus"></ha-icon>${t.add}</button></section>`;
+  }
+
+  _plantCard(plant) {
+    const t = this._t;
+    const area = this._data.areas.find((item) => item.id === plant.area_id);
+    const sensor = this._sensorInfo(plant.water_sensor_entity_id);
+    const due = this._isDue(plant);
+    const dateClass = due ? "due" : "";
+    const image = plant.image_url
+      ? `<img src="${escapeHtml(plant.image_url)}" alt="${escapeHtml(plant.name)}" loading="lazy">`
+      : `<div class="image-placeholder"><ha-icon icon="mdi:flower-tulip-outline"></ha-icon></div>`;
+    const warnings = [
+      plant.is_toxic_to_cats ? `<span class="warning"><ha-icon icon="mdi:cat"></ha-icon>${t.toxicCats}</span>` : "",
+      plant.is_toxic_to_dogs ? `<span class="warning"><ha-icon icon="mdi:dog"></ha-icon>${t.toxicDogs}</span>` : "",
+    ].filter(Boolean).join("");
+
+    return `
+      <article class="plant-card" data-plant-id="${escapeHtml(plant.id)}">
+        <div class="plant-image">${image}<span class="area-chip"><ha-icon icon="mdi:map-marker-outline"></ha-icon>${escapeHtml(area?.name || t.noArea)}</span></div>
+        <div class="plant-content">
+          <div class="plant-title"><div><h2>${escapeHtml(plant.name)}</h2>${plant.scientific_name ? `<em>${escapeHtml(plant.scientific_name)}</em>` : ""}</div><button class="icon-button edit" title="${t.edit}"><ha-icon icon="mdi:pencil-outline"></ha-icon></button></div>
+          <div class="schedule">
+            <div><span>${t.lastWatered}</span><strong>${this._formatDate(plant.last_watered)}</strong></div>
+            <div class="${dateClass}"><span>${t.nextWatering}</span><strong>${this._formatDate(plant.next_watering)}</strong></div>
+            <div><span>${t.interval}</span><strong>${Number(plant.watering_interval_days || 0)} ${t.days}</strong></div>
+          </div>
+          ${plant.water_sensor_entity_id ? `<div class="sensor-row"><span class="sensor-icon"><ha-icon icon="mdi:water-percent"></ha-icon></span><div><span>${escapeHtml(sensor.name)}</span><strong data-sensor="${escapeHtml(plant.water_sensor_entity_id)}">${escapeHtml(sensor.value)}</strong></div></div>` : ""}
+          ${warnings ? `<div class="warnings">${warnings}</div>` : ""}
+          ${plant.notes ? `<p class="notes">${escapeHtml(plant.notes)}</p>` : ""}
+          <div class="card-actions"><button class="water"><ha-icon icon="mdi:watering-can"></ha-icon>${t.water}</button><button class="danger delete" title="${t.delete}"><ha-icon icon="mdi:trash-can-outline"></ha-icon></button></div>
+        </div>
+      </article>`;
+  }
+
+  _modalHtml() {
+    if (!this._modal) return "";
+    if (this._modal.type === "plant") return this._plantForm(this._modal.plant);
+    if (this._modal.type === "import") return this._importForm();
+    if (this._modal.type === "settings") return this._settingsForm();
+    return "";
+  }
+
+  _plantForm(plant) {
+    const t = this._t;
+    const isEdit = Boolean(plant?.id);
+    const areaOptions = (this._data.areas || []).map((area) => `<option value="${escapeHtml(area.id)}" ${area.id === plant?.area_id ? "selected" : ""}>${escapeHtml(area.name)}</option>`).join("");
+    const sensorOptions = this._sensorOptions(plant?.water_sensor_entity_id);
+    const preview = this._pendingImage || plant?.image_url;
+    return `
+      <div class="modal-backdrop"><section class="modal wide" role="dialog" aria-modal="true">
+        <div class="modal-header"><div><h2>${isEdit ? t.editTitle : t.addTitle}</h2><p>${isEdit ? escapeHtml(plant.name) : t.subtitle}</p></div><button class="icon-button close"><ha-icon icon="mdi:close"></ha-icon></button></div>
+        <form id="plant-form">
+          <input type="hidden" name="id" value="${escapeHtml(plant?.id || "")}">
+          <div class="form-grid">
+            <label class="field"><span>${t.plantName} *</span><input name="name" maxlength="255" required value="${escapeHtml(plant?.name || "")}"></label>
+            <label class="field"><span>${t.scientificName}</span><input name="scientific_name" maxlength="255" value="${escapeHtml(plant?.scientific_name || "")}"></label>
+            <label class="field"><span>${t.area}</span><select name="area_id"><option value="">${t.noArea}</option>${areaOptions}</select></label>
+            <label class="field"><span>${t.waterSensor}</span><select name="water_sensor_entity_id"><option value="">${t.noSensor}</option>${sensorOptions}</select></label>
+            <label class="field"><span>${t.interval}</span><div class="number-suffix"><input name="watering_interval_days" type="number" min="1" max="365" required value="${Number(plant?.watering_interval_days || 7)}"><span>${t.days}</span></div></label>
+            <div class="field image-field"><span>${t.image}</span><div class="image-upload">${preview ? `<img id="image-preview" src="${escapeHtml(preview)}" alt="">` : `<div id="image-preview" class="mini-placeholder"><ha-icon icon="mdi:image-plus"></ha-icon></div>`}<label class="upload-button"><ha-icon icon="mdi:upload"></ha-icon>${t.image}<input id="image-input" type="file" accept="image/*"></label></div><small>${t.imageHelp}</small>${plant?.image_url ? `<label class="check"><input name="remove_image" type="checkbox"> ${t.removeImage}</label>` : ""}</div>
+            <label class="field full"><span>${t.notes}</span><textarea name="notes" rows="3">${escapeHtml(plant?.notes || "")}</textarea></label>
+            <div class="field full checks"><label class="check"><input name="is_toxic_to_cats" type="checkbox" ${plant?.is_toxic_to_cats ? "checked" : ""}> <ha-icon icon="mdi:cat"></ha-icon>${t.toxicCats}</label><label class="check"><input name="is_toxic_to_dogs" type="checkbox" ${plant?.is_toxic_to_dogs ? "checked" : ""}> <ha-icon icon="mdi:dog"></ha-icon>${t.toxicDogs}</label></div>
+          </div>
+          <div class="modal-actions"><button type="button" class="secondary close">${t.cancel}</button><button type="submit" class="primary"><ha-icon icon="mdi:content-save-outline"></ha-icon>${t.save}</button></div>
+        </form>
+      </section></div>`;
+  }
+
+  _importForm() {
+    const t = this._t;
+    return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-header"><div><h2>${t.importTitle}</h2><p>${t.importHelp}</p></div><button class="icon-button close"><ha-icon icon="mdi:close"></ha-icon></button></div><form id="import-form"><label class="field"><span>${t.importData}</span><textarea name="data" rows="12" required placeholder='[{"name": "Monstera", "watering_interval_days": 7}]'></textarea></label><div class="modal-actions"><button type="button" class="secondary close">${t.cancel}</button><button type="submit" class="primary"><ha-icon icon="mdi:database-import-outline"></ha-icon>${t.import}</button></div></form></section></div>`;
+  }
+
+  _settingsForm() {
+    const t = this._t;
+    const amount = Number(this._data.settings?.default_water_amount_ml || 0);
+    return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-header"><div><h2>${t.settingsTitle}</h2><p>${t.amountHelp}</p></div><button class="icon-button close"><ha-icon icon="mdi:close"></ha-icon></button></div><form id="settings-form"><label class="field"><span>${t.defaultAmount}</span><input name="amount" type="number" min="0" max="10000" value="${amount}" required></label><div class="modal-actions"><button type="button" class="secondary close">${t.cancel}</button><button type="submit" class="primary"><ha-icon icon="mdi:content-save-outline"></ha-icon>${t.save}</button></div></form></section></div>`;
+  }
+
+  _bindEvents() {
+    this.shadowRoot.querySelector("#add")?.addEventListener("click", () => this._openPlant());
+    this.shadowRoot.querySelector("#empty-add")?.addEventListener("click", () => this._openPlant());
+    this.shadowRoot.querySelector("#import")?.addEventListener("click", () => this._openModal("import"));
+    this.shadowRoot.querySelector("#settings")?.addEventListener("click", () => this._openModal("settings"));
+    this.shadowRoot.querySelectorAll(".close").forEach((button) => button.addEventListener("click", () => this._closeModal()));
+    this.shadowRoot.querySelector(".modal-backdrop")?.addEventListener("click", (event) => { if (event.target.classList.contains("modal-backdrop")) this._closeModal(); });
+    this.shadowRoot.querySelectorAll(".plant-card").forEach((card) => {
+      const id = card.dataset.plantId;
+      card.querySelector(".edit")?.addEventListener("click", () => this._openPlant(id));
+      card.querySelector(".delete")?.addEventListener("click", () => this._deletePlant(id));
+      card.querySelector(".water")?.addEventListener("click", (event) => this._waterPlant(id, event.currentTarget));
+    });
+    this.shadowRoot.querySelector("#image-input")?.addEventListener("change", (event) => this._prepareImage(event.target.files?.[0]));
+    this.shadowRoot.querySelector("#plant-form")?.addEventListener("submit", (event) => this._savePlant(event));
+    this.shadowRoot.querySelector("#import-form")?.addEventListener("submit", (event) => this._importPlants(event));
+    this.shadowRoot.querySelector("#settings-form")?.addEventListener("submit", (event) => this._saveSettings(event));
+  }
+
+  _openPlant(id = null) {
+    const source = id ? this._data.plants.find((plant) => String(plant.id) === String(id)) : null;
+    this._pendingImage = null;
+    this._modal = { type: "plant", plant: source ? { ...source } : {} };
+    this._render();
+    queueMicrotask(() => this.shadowRoot.querySelector('input[name="name"]')?.focus());
+  }
+
+  _openModal(type) {
+    this._pendingImage = null;
+    this._modal = { type };
+    this._render();
+  }
+
+  _closeModal() {
+    this._modal = null;
+    this._pendingImage = null;
+    this._render();
+  }
+
+  async _prepareImage(file) {
+    if (!file) return;
+    try {
+      this._pendingImage = await this._resizeImage(file);
+      const preview = this.shadowRoot.querySelector("#image-preview");
+      if (preview?.tagName === "IMG") preview.src = this._pendingImage;
+      else if (preview) preview.outerHTML = `<img id="image-preview" src="${this._pendingImage}" alt="">`;
+    } catch (error) {
+      this._showToast(error?.message || this._t.saveError, true);
+    }
+  }
+
+  async _resizeImage(file) {
+    if (!file.type.startsWith("image/")) throw new Error(this._t.imageHelp);
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const maximum = 1280;
+      const scale = Math.min(1, maximum / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/webp", 0.82);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async _savePlant(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") || "").trim();
+    if (!name) return this._showToast(this._t.required, true);
+    const current = this._modal?.plant || {};
+    const plant = {
+      id: form.get("id") || undefined,
+      name,
+      scientific_name: String(form.get("scientific_name") || "").trim(),
+      area_id: String(form.get("area_id") || ""),
+      water_sensor_entity_id: String(form.get("water_sensor_entity_id") || ""),
+      image_url: current.image_url || null,
+      watering_interval_days: Number(form.get("watering_interval_days")),
+      notes: String(form.get("notes") || "").trim(),
+      is_toxic_to_cats: form.get("is_toxic_to_cats") === "on",
+      is_toxic_to_dogs: form.get("is_toxic_to_dogs") === "on",
+    };
+    try {
+      await this._hass.callWS({ type: "plantmark/save", plant, image_data: this._pendingImage || undefined, remove_image: this._pendingImage ? false : form.get("remove_image") === "on" });
+      this._closeModal();
+      await this._load();
+      this._showToast(this._t.saved);
+    } catch (error) {
+      this._showToast(error?.message || this._t.saveError, true);
+    }
+  }
+
+  async _deletePlant(id) {
+    if (!window.confirm(this._t.confirmDelete)) return;
+    try {
+      await this._hass.callWS({ type: "plantmark/delete", plant_id: String(id) });
+      await this._load();
+      this._showToast(this._t.deleted);
+    } catch (error) {
+      this._showToast(error?.message || this._t.saveError, true);
+    }
+  }
+
+  async _waterPlant(id, button) {
+    button.disabled = true;
+    const old = button.innerHTML;
+    button.innerHTML = `<ha-icon icon="mdi:loading"></ha-icon>${this._t.watering}`;
+    try {
+      await this._hass.callWS({ type: "plantmark/water", plant_id: String(id) });
+      await this._load();
+      this._showToast(this._t.watered);
+    } catch (error) {
+      button.disabled = false;
+      button.innerHTML = old;
+      this._showToast(error?.message || this._t.saveError, true);
+    }
+  }
+
+  async _importPlants(event) {
+    event.preventDefault();
+    const data = String(new FormData(event.currentTarget).get("data") || "");
+    try {
+      const result = await this._hass.callWS({ type: "plantmark/import", data });
+      this._closeModal();
+      await this._load();
+      this._showToast(`${result.added} ${this._t.imported}`);
+    } catch (error) {
+      this._showToast(error?.message || this._t.saveError, true);
+    }
+  }
+
+  async _saveSettings(event) {
+    event.preventDefault();
+    const amount = Number(new FormData(event.currentTarget).get("amount"));
+    try {
+      await this._hass.callWS({ type: "plantmark/settings", default_water_amount_ml: amount });
+      this._closeModal();
+      await this._load();
+      this._showToast(this._t.settingsSaved);
+    } catch (error) {
+      this._showToast(error?.message || this._t.saveError, true);
+    }
+  }
+
+  _sensorOptions(selected) {
+    const states = Object.values(this._hass?.states || {}).filter((state) => state.entity_id.startsWith("sensor.") || state.entity_id.startsWith("binary_sensor."));
+    if (selected && !states.some((state) => state.entity_id === selected)) states.push({ entity_id: selected, attributes: { friendly_name: selected } });
+    return states.sort((a, b) => this._sensorName(a).localeCompare(this._sensorName(b), this._language)).map((state) => `<option value="${escapeHtml(state.entity_id)}" ${state.entity_id === selected ? "selected" : ""}>${escapeHtml(this._sensorName(state))} · ${escapeHtml(state.entity_id)}</option>`).join("");
+  }
+
+  _sensorName(state) {
+    return state?.attributes?.friendly_name || state?.entity_id || this._t.unavailable;
+  }
+
+  _sensorInfo(entityId) {
+    const state = this._hass?.states?.[entityId];
+    if (!state) return { name: entityId || this._t.noSensor, value: this._t.unavailable };
+    const unit = state.attributes?.unit_of_measurement || "";
+    return { name: this._sensorName(state), value: `${state.state}${unit ? ` ${unit}` : ""}` };
+  }
+
+  _updateSensorValues() {
+    this.shadowRoot?.querySelectorAll("[data-sensor]").forEach((element) => { element.textContent = this._sensorInfo(element.dataset.sensor).value; });
+  }
+
+  _isDue(plant) {
+    const date = new Date(plant.next_watering || "");
+    return !Number.isNaN(date.getTime()) && date.getTime() <= Date.now();
+  }
+
+  _formatDate(value) {
+    const date = new Date(value || "");
+    if (Number.isNaN(date.getTime())) return "–";
+    return new Intl.DateTimeFormat(this._language, { day: "2-digit", month: "short", year: "numeric" }).format(date);
+  }
+
+  _showToast(message, error = false) {
+    const toast = this.shadowRoot?.querySelector("#toast");
+    if (!toast) return;
+    toast.textContent = message;
+    toast.className = `toast show${error ? " error-toast" : ""}`;
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => { toast.className = "toast"; }, 3500);
+  }
+
+  _styles() {
+    return `
+      :host{display:block;min-height:100vh;background:var(--primary-background-color);color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}*{box-sizing:border-box}.page{max-width:1440px;margin:0 auto;padding:32px 28px 56px}header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:28px}.heading{display:flex;align-items:center;gap:16px}.brand{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;color:#fff;background:linear-gradient(145deg,#4aa96c,#277c4b);box-shadow:0 10px 25px rgba(39,124,75,.25)}.brand ha-icon{--mdc-icon-size:32px}h1,h2,p{margin:0}h1{font-size:30px;line-height:1.15}.heading p,.modal-header p{color:var(--secondary-text-color);margin-top:5px}.header-actions,.card-actions,.modal-actions{display:flex;gap:10px}button,.upload-button{border:0;border-radius:12px;min-height:42px;padding:0 16px;font:inherit;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:transform .15s,background .15s,opacity .15s}button:active{transform:scale(.97)}button:disabled{opacity:.55;cursor:wait}.primary{background:var(--primary-color,#43a047);color:var(--text-primary-color,#fff)}.secondary{background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color)}.danger{background:color-mix(in srgb,var(--error-color,#db4437) 12%,transparent);color:var(--error-color,#db4437)}.icon-button{width:40px;height:40px;min-height:40px;padding:0;border-radius:50%;background:transparent;color:var(--secondary-text-color)}.icon-button:hover{background:var(--secondary-background-color);color:var(--primary-text-color)}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:24px}.stat{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:18px;padding:18px;display:flex;align-items:center;gap:14px;box-shadow:var(--ha-card-box-shadow,0 2px 8px rgba(0,0,0,.05))}.stat-icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center}.stat-icon.green{background:rgba(67,160,71,.14);color:#43a047}.stat-icon.blue{background:rgba(3,169,244,.14);color:#039be5}.stat-icon.purple{background:rgba(126,87,194,.14);color:#7e57c2}.stat strong{font-size:25px;display:block}.stat span:last-child{font-size:13px;color:var(--secondary-text-color)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:20px}.plant-card{overflow:hidden;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:22px;box-shadow:var(--ha-card-box-shadow,0 4px 18px rgba(0,0,0,.07));transition:transform .2s,box-shadow .2s}.plant-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.12)}.plant-image{height:210px;position:relative;background:var(--secondary-background-color)}.plant-image img{width:100%;height:100%;object-fit:cover}.image-placeholder{height:100%;display:grid;place-items:center;color:var(--disabled-text-color);background:linear-gradient(135deg,rgba(67,160,71,.1),rgba(139,195,74,.16))}.image-placeholder ha-icon{--mdc-icon-size:72px}.area-chip{position:absolute;left:14px;bottom:14px;max-width:calc(100% - 28px);padding:7px 11px;border-radius:999px;background:rgba(20,30,24,.78);backdrop-filter:blur(8px);color:#fff;font-size:12px;display:flex;align-items:center;gap:5px}.area-chip ha-icon{--mdc-icon-size:16px}.plant-content{padding:18px}.plant-title{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.plant-title h2{font-size:21px}.plant-title em{display:block;margin-top:4px;color:var(--secondary-text-color);font-size:13px}.schedule{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.schedule div{padding:10px 8px;border-radius:11px;background:var(--secondary-background-color);min-width:0}.schedule span{font-size:10px;color:var(--secondary-text-color);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.schedule strong{font-size:12px;display:block;margin-top:4px;white-space:nowrap}.schedule .due{background:color-mix(in srgb,var(--error-color,#db4437) 11%,transparent)}.schedule .due strong{color:var(--error-color,#db4437)}.sensor-row{display:flex;align-items:center;gap:11px;padding:11px;border-radius:12px;background:rgba(3,169,244,.09);margin-bottom:12px}.sensor-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:rgba(3,169,244,.15);color:#039be5}.sensor-row span:not(.sensor-icon){display:block;font-size:11px;color:var(--secondary-text-color)}.sensor-row strong{display:block;margin-top:2px}.warnings{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.warning{display:flex;align-items:center;gap:4px;padding:5px 8px;border-radius:8px;background:rgba(255,152,0,.12);color:#ef8c00;font-size:11px}.warning ha-icon{--mdc-icon-size:15px}.notes{font-size:13px;line-height:1.45;color:var(--secondary-text-color);margin:12px 0;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.card-actions{margin-top:16px}.card-actions .water{flex:1;background:rgba(3,169,244,.13);color:#0288d1}.card-actions .danger{width:44px;padding:0}.empty{min-height:420px;border:1px dashed var(--divider-color);border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;background:var(--card-background-color)}.empty-icon{width:90px;height:90px;border-radius:30px;background:rgba(67,160,71,.12);color:#43a047;display:grid;place-items:center;margin-bottom:18px}.empty-icon ha-icon{--mdc-icon-size:48px}.empty h2{font-size:23px}.empty p{max-width:440px;color:var(--secondary-text-color);margin:9px 0 20px}.modal-backdrop{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.48);backdrop-filter:blur(3px)}.modal{width:min(560px,100%);max-height:calc(100vh - 40px);overflow:auto;background:var(--card-background-color);border-radius:22px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.35)}.modal.wide{width:min(820px,100%)}.modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px}.modal-header h2{font-size:23px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:17px}.field{display:flex;flex-direction:column;gap:7px}.field>span{font-size:13px;font-weight:600}.field.full{grid-column:1/-1}input,select,textarea{width:100%;border:1px solid var(--divider-color);border-radius:11px;background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit;padding:11px 12px;outline:none}input:focus,select:focus,textarea:focus{border-color:var(--primary-color);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary-color) 20%,transparent)}textarea{resize:vertical}.number-suffix{display:flex;align-items:center;position:relative}.number-suffix span{position:absolute;right:12px;color:var(--secondary-text-color);font-size:12px}.number-suffix input{padding-right:55px}.image-upload{display:flex;align-items:center;gap:12px}.image-upload img,.mini-placeholder{width:76px;height:76px;border-radius:13px;object-fit:cover;background:var(--secondary-background-color)}.mini-placeholder{display:grid;place-items:center;color:var(--secondary-text-color)}.upload-button{background:var(--secondary-background-color);border:1px solid var(--divider-color);font-size:13px}.upload-button input{display:none}.field small{color:var(--secondary-text-color);font-size:11px;line-height:1.4}.checks{display:flex;flex-direction:row;gap:22px;flex-wrap:wrap}.check{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}.check input{width:18px;height:18px;accent-color:var(--primary-color)}.check ha-icon{--mdc-icon-size:18px}.modal-actions{justify-content:flex-end;margin-top:24px}.loading{min-height:360px;display:grid;place-items:center}.spinner{width:42px;height:42px;border:4px solid var(--divider-color);border-top-color:var(--primary-color);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.error{display:flex;align-items:center;gap:9px;padding:12px 14px;margin-bottom:18px;border-radius:12px;background:color-mix(in srgb,var(--error-color,#db4437) 12%,transparent);color:var(--error-color,#db4437)}.toast{position:fixed;z-index:1200;left:50%;bottom:30px;transform:translate(-50%,20px);padding:12px 18px;border-radius:11px;background:#263229;color:#fff;box-shadow:0 8px 30px rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.toast.error-toast{background:var(--error-color,#db4437)}
+      @media(max-width:850px){.page{padding:22px 16px 42px}header{align-items:flex-start;flex-direction:column}.header-actions{width:100%;flex-wrap:wrap}.header-actions button{flex:1}.stats{grid-template-columns:1fr}.stat{padding:13px}.grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+      @media(max-width:520px){h1{font-size:25px}.brand{width:48px;height:48px;border-radius:15px}.header-actions{display:grid;grid-template-columns:1fr 1fr}.header-actions #add{grid-column:1/-1}.plant-image{height:190px}.modal-backdrop{padding:0;align-items:flex-end}.modal,.modal.wide{width:100%;max-height:94vh;border-radius:22px 22px 0 0;padding:20px}.schedule{gap:5px}.schedule div{padding:9px 6px}.schedule strong{font-size:11px}}
+    `;
+  }
+}
+
+if (!customElements.get("plantmark-panel")) customElements.define("plantmark-panel", PlantmarkPanel);

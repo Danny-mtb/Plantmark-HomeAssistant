@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from datetime import timedelta
-import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -58,6 +58,10 @@ class PlantmarkDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, A
         options = dict(self.entry.options)
         options[CONF_PLANTS] = plants
         self.hass.config_entries.async_update_entry(self.entry, options=options)
+        self.async_set_updated_data(self._plants_from_list(plants))
+
+    def async_replace_plants(self, plants: list[dict[str, Any]]) -> None:
+        """Immediately expose plants changed through the Plantmark panel."""
         self.async_set_updated_data(self._plants_from_list(plants))
 
     def _plants_from_options(self) -> dict[str, dict[str, Any]]:

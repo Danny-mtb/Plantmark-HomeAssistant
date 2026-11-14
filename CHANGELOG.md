@@ -3,6 +3,18 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.1.0 - 2026-11-14
+
+- Add a responsive Plantmark sidebar panel for viewing and managing all plants.
+- Add direct local JPEG, PNG and WebP image uploads with automatic browser-side
+  resizing.
+- Add native Home Assistant area assignment and keep the plant device area in
+  sync.
+- Add optional water or soil-moisture sensor assignment with its live state in
+  the plant overview.
+- Add plant creation, editing, deletion, watering, JSON import and global
+  settings directly to the sidebar panel.
+
 ## 1.0.2 - 2026-11-14
 
 - Fix the sensor platform failing to import because the active watering interval

@@ -7,6 +7,7 @@ from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -57,7 +58,17 @@ class PlantmarkWateringCalendar(
             start = _as_datetime(plant.get("next_watering"))
             if start is None:
                 continue
-            location = plant.get("room_name") or plant.get("location")
+            area_id = plant.get("area_id")
+            area = (
+                ar.async_get(self.coordinator.hass).async_get_area(area_id)
+                if isinstance(area_id, str) and area_id
+                else None
+            )
+            location = (
+                area.name
+                if area is not None
+                else plant.get("room_name") or plant.get("location")
+            )
             events.append(
                 CalendarEvent(
                     start=start,
