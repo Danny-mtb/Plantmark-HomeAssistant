@@ -51,6 +51,10 @@ eine eigene, responsive Plantmark-Seite in der Home-Assistant-Seitenleiste.
 6. Öffne anschließend den neuen Eintrag **Plantmark** in der Seitenleiste und
    füge dort deine erste Pflanze hinzu.
 
+Nach einem Update muss Home Assistant neu gestartet werden. Ab Version 1.2.1
+verwendet das Plantmark-Panel automatisch eine aus dem Dateiinhalt erzeugte
+Versionskennung, damit der Browser keine ältere Oberfläche aus dem Cache lädt.
+
 Für eine manuelle Installation kopierst du
 `custom_components/plantmark` nach
 `<home-assistant-config>/custom_components/plantmark` und startest Home

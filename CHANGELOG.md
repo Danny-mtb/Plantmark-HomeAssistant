@@ -3,6 +3,12 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.2.1 - 2026-11-14
+
+- Add content-based cache busting for the Plantmark sidebar module so Home
+  Assistant browsers immediately load the API, watering-window, moisture and
+  notification controls delivered by an updated integration.
+
 ## 1.2.0 - 2026-11-14
 
 - Add an optional Perenual plant database integration using each user's own API

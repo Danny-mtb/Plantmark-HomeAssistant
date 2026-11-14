@@ -50,6 +50,10 @@ async def async_setup_panel(hass: HomeAssistant) -> None:
     """Register the Plantmark sidebar panel and its API once."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     integration_dir = Path(__file__).parent
+    frontend_file = integration_dir / "frontend" / "plantmark-panel.js"
+    frontend_version = await hass.async_add_executor_job(
+        _frontend_asset_version, frontend_file
+    )
     image_dir = _image_directory(hass)
 
     if not domain_data.get(_STATIC_REGISTERED):
@@ -58,7 +62,7 @@ async def async_setup_panel(hass: HomeAssistant) -> None:
             [
                 StaticPathConfig(
                     PANEL_STATIC_URL,
-                    str(integration_dir / "frontend" / "plantmark-panel.js"),
+                    str(frontend_file),
                     False,
                 ),
                 StaticPathConfig(IMAGE_STATIC_URL, str(image_dir), False),
@@ -87,7 +91,7 @@ async def async_setup_panel(hass: HomeAssistant) -> None:
             webcomponent_name=PANEL_ELEMENT,
             sidebar_title="Plantmark",
             sidebar_icon="mdi:sprout",
-            module_url=PANEL_STATIC_URL,
+            module_url=f"{PANEL_STATIC_URL}?v={frontend_version}",
             require_admin=True,
             config_panel_domain=DOMAIN,
         )
@@ -375,6 +379,11 @@ def _config_entry(hass: HomeAssistant) -> ConfigEntry:
     if not entries:
         raise HomeAssistantError("Plantmark is not configured")
     return entries[0]
+
+
+def _frontend_asset_version(path: Path) -> str:
+    """Return a cache-busting version tied to the frontend file content."""
+    return sha256(path.read_bytes()).hexdigest()[:12]
 
 
 def _perenual_client(hass: HomeAssistant, entry: ConfigEntry) -> PerenualClient:
