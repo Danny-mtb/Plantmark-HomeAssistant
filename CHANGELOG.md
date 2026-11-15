@@ -3,6 +3,15 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.2.2 - 2026-11-15
+
+- Load trusted Perenual thumbnails through the Home Assistant backend so search
+  images work with the frontend content-security policy.
+- Store an applied Perenual image locally in Home Assistant while retaining its
+  license attribution.
+- Fall back to the basic species information returned by search when Perenual
+  blocks detail data because of plan or request limits.
+
 ## 1.2.1 - 2026-11-14
 
 - Add content-based cache busting for the Plantmark sidebar module so Home

@@ -61,6 +61,8 @@ const TEXT = {
     noResults: "Keine passenden Pflanzen gefunden.",
     applyData: "Daten übernehmen",
     dataApplied: "Pflegedaten wurden übernommen",
+    basicDataApplied: "Basisdaten wurden übernommen. Perenual stellt die Detaildaten für diese Pflanze in deinem Tarif nicht bereit.",
+    paidDetails: "Detaildaten eventuell nur mit kostenpflichtigem Perenual-Tarif",
     apiNotConfigured: "Hinterlege zuerst deinen persönlichen Perenual-API-Key in den Einstellungen.",
     openSettings: "API einrichten",
     providedBy: "Daten von Perenual",
@@ -160,6 +162,8 @@ const TEXT = {
     noResults: "No matching plants found.",
     applyData: "Apply data",
     dataApplied: "Plant care data applied",
+    basicDataApplied: "Basic data was applied. Perenual does not provide this plant's details with your current plan.",
+    paidDetails: "Details may require a paid Perenual plan",
     apiNotConfigured: "First add your personal Perenual API key in settings.",
     openSettings: "Configure API",
     providedBy: "Data from Perenual",
@@ -216,6 +220,7 @@ class PlantmarkPanel extends HTMLElement {
     this._data = { plants: [], areas: [], settings: {} };
     this._modal = null;
     this._pendingImage = null;
+    this._pendingImageSource = null;
     this._apiResults = null;
     this._apiQuery = "";
     this._apiLoading = false;
@@ -416,10 +421,12 @@ class PlantmarkPanel extends HTMLElement {
     if (!this._apiQuery || this._apiResults === null) return "";
     if (!this._apiResults.length) return `<p class="api-empty">${this._t.noResults}</p>`;
     return `<div class="api-results">${this._apiResults.map((result) => {
-      const image = result.image_url
-        ? `<img src="${escapeHtml(result.image_url)}" alt="">`
+      const imageSource = result.image_data || null;
+      const image = imageSource
+        ? `<img src="${escapeHtml(imageSource)}" alt="">`
         : `<span class="api-result-placeholder"><ha-icon icon="mdi:sprout"></ha-icon></span>`;
-      const details = [result.scientific_name, result.watering, ...(result.sunlight || []).slice(0, 1)].filter(Boolean).map(escapeHtml).join(" · ");
+      const planHint = Number(result.id) > 3000 ? this._t.paidDetails : null;
+      const details = [result.scientific_name, result.watering, ...(result.sunlight || []).slice(0, 1), planHint].filter(Boolean).map(escapeHtml).join(" · ");
       return `<article class="api-result">${image}<div><strong>${escapeHtml(result.common_name || result.scientific_name || `#${result.id}`)}</strong><span>${details}</span></div><button type="button" class="primary apply-api" data-species-id="${Number(result.id)}">${this._t.applyData}</button></article>`;
     }).join("")}</div>`;
   }
@@ -472,6 +479,7 @@ class PlantmarkPanel extends HTMLElement {
   _openPlant(id = null) {
     const source = id ? this._data.plants.find((plant) => String(plant.id) === String(id)) : null;
     this._pendingImage = null;
+    this._pendingImageSource = null;
     this._apiResults = null;
     this._apiQuery = source?.scientific_name || source?.name || "";
     this._apiLoading = false;
@@ -482,6 +490,7 @@ class PlantmarkPanel extends HTMLElement {
 
   _openModal(type) {
     this._pendingImage = null;
+    this._pendingImageSource = null;
     this._apiResults = null;
     this._apiQuery = "";
     this._apiLoading = false;
@@ -492,6 +501,7 @@ class PlantmarkPanel extends HTMLElement {
   _closeModal() {
     this._modal = null;
     this._pendingImage = null;
+    this._pendingImageSource = null;
     this._apiResults = null;
     this._apiQuery = "";
     this._apiLoading = false;
@@ -556,20 +566,37 @@ class PlantmarkPanel extends HTMLElement {
     this._render();
     let errorMessage = null;
     let applied = false;
+    let basicDataOnly = false;
     try {
-      const response = await this._hass.callWS({ type: "plantmark/api/details", species_id: speciesId });
-      const details = response.plant || {};
+      const searchResult = this._apiResults?.find((result) => Number(result.id) === speciesId);
+      let details;
+      try {
+        const response = await this._hass.callWS({ type: "plantmark/api/details", species_id: speciesId });
+        details = response.plant || {};
+      } catch (error) {
+        if (!searchResult) throw error;
+        details = {
+          ...searchResult,
+          api_provider: "perenual",
+          perenual_id: speciesId,
+          common_name: searchResult.common_name,
+        };
+        basicDataOnly = true;
+      }
       const current = this._modal.plant;
       const hasLocalImage = String(current.image_url || "").startsWith("/plantmark_images/");
       Object.assign(current, details, {
         name: details.common_name || current.name || "",
         scientific_name: details.scientific_name || current.scientific_name || "",
         watering_interval_days: details.watering_interval_days || current.watering_interval_days || 7,
-        image_url: hasLocalImage ? current.image_url : details.image_url || current.image_url || null,
+        image_url: hasLocalImage ? current.image_url : details.image_data ? details.image_url : current.image_url || null,
       });
       if (hasLocalImage) {
         current.image_license_name = null;
         current.image_license_url = null;
+      } else if (details.image_data) {
+        this._pendingImage = details.image_data;
+        this._pendingImageSource = "api";
       }
       if (typeof details.poisonous_to_pets === "boolean") {
         current.is_toxic_to_cats = details.poisonous_to_pets;
@@ -583,7 +610,7 @@ class PlantmarkPanel extends HTMLElement {
     } finally {
       this._apiLoading = false;
       this._render();
-      if (applied) this._showToast(this._t.dataApplied);
+      if (applied) this._showToast(basicDataOnly ? this._t.basicDataApplied : this._t.dataApplied);
       if (errorMessage) this._showToast(errorMessage, true);
     }
   }
@@ -602,6 +629,7 @@ class PlantmarkPanel extends HTMLElement {
     if (!file) return;
     try {
       this._pendingImage = await this._resizeImage(file);
+      this._pendingImageSource = "upload";
       const preview = this.shadowRoot.querySelector("#image-preview");
       if (preview?.tagName === "IMG") preview.src = this._pendingImage;
       else if (preview) preview.outerHTML = `<img id="image-preview" src="${this._pendingImage}" alt="">`;
@@ -651,7 +679,7 @@ class PlantmarkPanel extends HTMLElement {
       ...this._apiPayload(current),
     };
     try {
-      await this._hass.callWS({ type: "plantmark/save", plant, image_data: this._pendingImage || undefined, remove_image: this._pendingImage ? false : form.get("remove_image") === "on" });
+      await this._hass.callWS({ type: "plantmark/save", plant, image_data: this._pendingImage || undefined, preserve_image_license: this._pendingImageSource === "api", remove_image: this._pendingImage ? false : form.get("remove_image") === "on" });
       this._closeModal();
       await this._load();
       this._showToast(this._t.saved);

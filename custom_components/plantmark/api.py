@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import re
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from homeassistant.core import HomeAssistant, callback
@@ -20,6 +23,11 @@ REQUEST_TIMEOUT = ClientTimeout(total=20)
 SEARCH_CACHE_SECONDS = 30 * 60
 DETAIL_CACHE_SECONDS = 24 * 60 * 60
 MAX_RESULTS = 20
+MAX_REMOTE_IMAGE_BYTES = 1_500_000
+MAX_THUMBNAIL_BYTES = 250_000
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_IMAGE_HOSTS = {"perenual.com", "www.perenual.com"}
+ALLOWED_IMAGE_PATHS = ("/storage/species_image/", "/species_image/")
 
 _CLIENT_DATA = "perenual_client"
 
@@ -35,6 +43,7 @@ class PerenualClient:
         self._session = session
         self._api_key = api_key
         self._cache: dict[str, tuple[float, Any]] = {}
+        self._image_semaphore = asyncio.Semaphore(4)
 
     @property
     def api_key(self) -> str:
@@ -51,11 +60,22 @@ class PerenualClient:
             data = payload.get("data", []) if isinstance(payload, dict) else []
             if not isinstance(data, list):
                 return []
-            return [
+            results = [
                 _search_result(item)
                 for item in data[:MAX_RESULTS]
                 if isinstance(item, dict) and item.get("id") is not None
             ]
+            image_data = await asyncio.gather(
+                *(
+                    self.async_image_data(
+                        result.get("image_url"), max_bytes=MAX_THUMBNAIL_BYTES
+                    )
+                    for result in results
+                )
+            )
+            for result, encoded_image in zip(results, image_data, strict=True):
+                result["image_data"] = encoded_image
+            return results
 
         return await self._async_cached(cache_key, SEARCH_CACHE_SECONDS, _request)
 
@@ -70,6 +90,47 @@ class PerenualClient:
             return _plant_details(payload)
 
         return await self._async_cached(cache_key, DETAIL_CACHE_SECONDS, _request)
+
+    async def async_image_data(
+        self, image_url: Any, *, max_bytes: int = MAX_REMOTE_IMAGE_BYTES
+    ) -> str | None:
+        """Download one trusted Perenual image for use inside Home Assistant."""
+        url = _trusted_image_url(image_url)
+        if url is None:
+            return None
+
+        async def _request() -> str | None:
+            async with self._image_semaphore:
+                try:
+                    async with self._session.get(
+                        url,
+                        timeout=REQUEST_TIMEOUT,
+                        allow_redirects=False,
+                    ) as response:
+                        content_type = response.headers.get("Content-Type", "").split(
+                            ";", 1
+                        )[0]
+                        if (
+                            response.status != 200
+                            or content_type not in ALLOWED_IMAGE_TYPES
+                        ):
+                            return None
+                        if (
+                            response.content_length is not None
+                            and response.content_length > max_bytes
+                        ):
+                            return None
+                        content = await response.content.read(max_bytes + 1)
+                        if len(content) > max_bytes:
+                            return None
+                        encoded = base64.b64encode(content).decode("ascii")
+                        return f"data:{content_type};base64,{encoded}"
+                except (ClientError, TimeoutError):
+                    return None
+
+        return await self._async_cached(
+            f"image:{max_bytes}:{url}", DETAIL_CACHE_SECONDS, _request
+        )
 
     async def _async_get(
         self, path: str, parameters: dict[str, Any] | None = None
@@ -130,7 +191,7 @@ def clear_perenual_client(hass: HomeAssistant) -> None:
 
 
 def _search_result(payload: dict[str, Any]) -> dict[str, Any]:
-    image = _image_data(payload.get("default_image"))
+    image = _image_data(payload.get("default_image"), thumbnail=True)
     return {
         "id": int(payload["id"]),
         "common_name": _text(payload.get("common_name")),
@@ -185,7 +246,7 @@ def _plant_details(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _image_data(value: Any) -> dict[str, str | None]:
+def _image_data(value: Any, *, thumbnail: bool = False) -> dict[str, str | None]:
     if not isinstance(value, dict):
         return {
             "image_url": None,
@@ -194,14 +255,35 @@ def _image_data(value: Any) -> dict[str, str | None]:
         }
     return {
         "image_url": _text(
-            value.get("regular_url")
-            or value.get("medium_url")
+            (value.get("thumbnail") if thumbnail else value.get("medium_url"))
             or value.get("small_url")
+            or value.get("regular_url")
             or value.get("original_url")
         ),
         "image_license_name": _text(value.get("license_name")),
         "image_license_url": _text(value.get("license_url")),
     }
+
+
+def _trusted_image_url(value: Any) -> str | None:
+    url = _text(value)
+    if url is None:
+        return None
+    parsed = urlsplit(url)
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname not in ALLOWED_IMAGE_HOSTS
+        or not parsed.path.startswith(ALLOWED_IMAGE_PATHS)
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in (None, 443)
+    ):
+        return None
+    return url
 
 
 def _watering_interval_range(value: Any) -> tuple[int | None, int | None]:

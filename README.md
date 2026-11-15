@@ -117,7 +117,15 @@ Suche wird nur auf ausdrückliche Benutzeraktion ausgeführt. Suchergebnisse
 werden 30 Minuten, Pflanzendetails 24 Stunden im Arbeitsspeicher
 zwischengespeichert. Bereich, Wassersensor, Notizen und lokal hochgeladene
 Bilder bleiben bei der Datenübernahme erhalten. Von Perenual gelieferte Bilder
-werden zusammen mit der vorhandenen Lizenzangabe angezeigt.
+werden durch Home Assistant geladen, lokal unter `www/plantmark` gespeichert und
+zusammen mit der vorhandenen Lizenzangabe angezeigt. Dadurch funktionieren die
+Bilder auch dann, wenn der Browser externe Bilder blockiert.
+
+Der kostenlose Perenual-Tarif bietet derzeit 100 Anfragen pro Tag, beschränkt
+Detaildaten aber auf Pflanzen-IDs 1–3000. Suchtreffer außerhalb dieses Bereichs
+können trotzdem als Basisdaten übernommen werden; Plantmark zeigt in diesem
+Fall an, dass ausführliche Pflegeinformationen im verwendeten Perenual-Tarif
+nicht verfügbar sind.
 
 ## Veröffentlichen
 

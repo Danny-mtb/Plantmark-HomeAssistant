@@ -155,6 +155,7 @@ def websocket_list(
         vol.Required("plant"): dict,
         vol.Optional("image_data"): str,
         vol.Optional("remove_image", default=False): bool,
+        vol.Optional("preserve_image_license", default=False): bool,
     }
 )
 @websocket_api.require_admin
@@ -194,8 +195,9 @@ async def websocket_save(
         plant["image_url"] = await _async_store_image(
             hass, str(plant["id"]), image_data
         )
-        plant["image_license_name"] = None
-        plant["image_license_url"] = None
+        if not msg.get("preserve_image_license"):
+            plant["image_license_name"] = None
+            plant["image_license_url"] = None
 
     _save_plants(hass, entry, plants)
     _sync_device(hass, entry, plant)
@@ -371,6 +373,7 @@ async def websocket_api_details(
     """Return normalized care data for one Perenual species."""
     client = _perenual_client(hass, _config_entry(hass))
     details = await client.async_details(msg["species_id"])
+    details["image_data"] = await client.async_image_data(details.get("image_url"))
     connection.send_result(msg["id"], {"plant": details})
 
 
