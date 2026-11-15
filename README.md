@@ -1,180 +1,179 @@
 # Plantmark for Home Assistant
 
-Plantmark ist eine vollständig native Home-Assistant-Integration zur Verwaltung
-und Pflege von Zimmerpflanzen. Sie benötigt keinen separaten Docker-Container,
-keine Datenbank und keinen Cloud-Dienst. Alle Pflanzendaten werden im
-Home-Assistant-Konfigurationseintrag gespeichert. Die Verwaltung erfolgt über
-eine eigene, responsive Plantmark-Seite in der Home-Assistant-Seitenleiste.
+Plantmark is a native Home Assistant integration for managing and caring for
+houseplants. It does not require a separate Docker container, database, or cloud
+service. Plant data is stored in the Home Assistant config entry and managed
+from a responsive Plantmark page in the Home Assistant sidebar.
 
-## Funktionen
+## Features
 
-- Eigener **Plantmark-Tab in der Seitenleiste** mit Kartenansicht für alle
-  Pflanzen, Bilder, Gießtermine, Warnungen und Sensorwerte.
-- Pflanzen direkt im Plantmark-Tab hinzufügen, bearbeiten, gießen und löschen.
-- Direkter Upload von JPEG-, PNG- und WebP-Bildern. Die Bilder werden lokal in
-  Home Assistant gespeichert und vor dem Upload automatisch verkleinert.
-- Auswahl eines vorhandenen Home-Assistant-Bereichs. Das zugehörige
-  Pflanzengerät wird automatisch diesem Bereich zugeordnet.
-- Optionaler Wasser- oder Bodenfeuchtesensor pro Pflanze mit Live-Anzeige des
-  Sensorwerts in der Übersicht.
-- Auf Bodenfeuchte eingegrenzte Sensorauswahl und optionale automatische
-  Verschiebung des Gießzeitraums, solange die Erde noch feucht genug ist.
-- Gießzeiträume wie **7–10 Tage** sowie eigene Zeiträume für Frühling, Sommer,
-  Herbst und Winter.
-- Ein Gießkalender mit eigenem Symbol und mehrtägigen Gießfenstern.
-- Einmalige Gießerinnerungen über die Home-Assistant-Benachrichtigungszentrale,
-  moderne `notify`-Entitäten oder vorhandene `notify.*`-Dienste wie Pushover.
-- Optionale Suche in der Perenual-Pflanzendatenbank. Wissenschaftlicher Name,
-  Gießempfehlung, Licht, Erde, Herkunft, Pflegegrad, Giftigkeit, Beschreibung
-  und Bild können direkt übernommen werden.
-- Jede Pflanze wird weiterhin als eigenes Home-Assistant-Gerät mit nativen
-  Entitäten für Automationen angelegt.
-- Sensoren für das letzte Gießen, Beginn und Ende des nächsten Gießfensters,
-  minimales und maximales Gießintervall, verbleibende Tage, Saison und letzte
-  Gießmenge.
-- Warnsensoren für fälliges Gießen sowie Giftigkeit für Katzen und Hunde.
-- Nativer **Gießen**-Button pro Pflanze, geeignet für Dashboards und Automationen.
-- Gemeinsamer Gießkalender mit allen bevorstehenden Terminen.
-- Optionales Pflanzenbild, Standort, wissenschaftlicher Name und Notizen.
-- Import alter Plantmark-Daten aus einer JSON-Liste oder einer früheren
-  API-Antwort im Format `{ "plants": [...] }`.
-- Deutsche und englische Oberfläche sowie datenschutzfreundliche Diagnosedaten.
+- Dedicated Plantmark sidebar page with plant images, watering schedules,
+  warnings, care information, and live sensor values.
+- Add, edit, water, and delete plants without using the device page.
+- Upload JPEG, PNG, or WebP images. Images are resized in the browser and stored
+  locally in Home Assistant.
+- Assign a native Home Assistant area to each plant and keep the plant device's
+  area synchronized.
+- Assign an optional water or soil-moisture sensor with a live value display.
+- Filter the sensor selector to relevant moisture sensors.
+- Postpone a watering window automatically while the configured sensor reports
+  sufficient soil moisture.
+- Configure watering windows such as 7–10 days and optional individual windows
+  for spring, summer, autumn, and winter.
+- Display all upcoming watering windows in a shared Home Assistant calendar.
+- Configure watering reminders centrally for all plants, using one Home
+  Assistant notification target.
+- Send reminders through persistent notifications, modern `notify` entities,
+  or existing `notify.*` services such as Pushover.
+- Search the optional Perenual plant database and import names, care data,
+  toxicity, descriptions, and images when available for the configured plan.
+- Open every Perenual search result directly on its public plant page.
+- Represent every plant as a Home Assistant device with native sensors, binary
+  sensors, and a watering button for dashboards and automations.
+- Import plants from legacy Plantmark JSON.
+- German and English user interfaces with privacy-aware diagnostics.
 
-## Installation über Home Assistant Marketplace / HACS
+## Installation with HACS
 
-1. Öffne **Marketplace → Drei-Punkte-Menü → Benutzerdefinierte Repositories**.
-2. Füge die URL dieses GitHub-Repositories als Typ **Integration** hinzu.
-3. Installiere **Plantmark** und starte Home Assistant neu.
-4. Öffne **Einstellungen → Geräte & Dienste → Integration hinzufügen** und
-   wähle **Plantmark**.
-5. Vergib einen Namen für deine Pflanzenbibliothek.
-6. Öffne anschließend den neuen Eintrag **Plantmark** in der Seitenleiste und
-   füge dort deine erste Pflanze hinzu.
+Plantmark can be installed from its GitHub URL without submitting it to the
+default HACS repository list:
 
-Nach einem Update muss Home Assistant neu gestartet werden. Ab Version 1.2.1
-verwendet das Plantmark-Panel automatisch eine aus dem Dateiinhalt erzeugte
-Versionskennung, damit der Browser keine ältere Oberfläche aus dem Cache lädt.
+1. Open **HACS → Integrations**.
+2. Open the three-dot menu and select **Custom repositories**.
+3. Add this GitHub repository URL and select **Integration** as the category.
+4. Install **Plantmark**.
+5. Restart Home Assistant.
+6. Open **Settings → Devices & services → Add integration** and select
+   **Plantmark**.
+7. Open the new **Plantmark** entry in the sidebar and add your first plant.
 
-Für eine manuelle Installation kopierst du
-`custom_components/plantmark` nach
-`<home-assistant-config>/custom_components/plantmark` und startest Home
-Assistant neu.
+After every Plantmark update, restart Home Assistant. The sidebar module uses a
+content-based version identifier, so browsers load the new interface instead of
+an older cached copy.
 
-## Pflanzen verwalten
+For a manual installation, copy `custom_components/plantmark` to
+`<home-assistant-config>/custom_components/plantmark` and restart Home
+Assistant.
 
-Alle Verwaltungsfunktionen befinden sich im **Plantmark-Tab der Seitenleiste**:
+## Managing plants
 
-- **Pflanze hinzufügen** – Name, wissenschaftlicher Name, Gießintervall,
-  Home-Assistant-Bereich, Bild, Wassersensor, Notizen und Giftigkeitswarnungen.
-- **Bearbeiten** – alle Pflanzendaten sowie Bereich, Bild und Sensor ändern.
-- **Jetzt gießen** – aktualisiert den letzten und nächsten Gießtermin sofort.
-- **Löschen** – entfernt die Pflanze, das lokale Bild und ihre Entitäten.
-- **Importieren** – übernimmt frühere Plantmark-Daten aus einer JSON-Liste oder
-  einer API-Antwort im Format `{ "plants": [...] }`.
-- **Einstellungen** – legt die standardmäßig erfasste Gießmenge fest.
+All normal management is available from the Plantmark sidebar page:
 
-Im Pflanzendialog kann der allgemeine Gießzeitraum über einen frühesten und
-spätesten Tag festgelegt werden. Optional lassen sich abweichende Zeiträume für
-alle vier Jahreszeiten aktivieren. Plantmark verwendet meteorologische
-Jahreszeiten der Nordhalbkugel: Frühling März–Mai, Sommer Juni–August, Herbst
-September–November und Winter Dezember–Februar.
+- **Add plant** — configure the name, scientific name, watering window, area,
+  image, moisture sensor, notes, and toxicity warnings.
+- **Edit** — update all plant-specific information.
+- **Water now** — record a watering event and calculate the next window.
+- **Delete** — remove the plant, its local image, device, and entities.
+- **Import** — import a JSON list or an old response containing a top-level
+  `plants` list.
+- **Settings** — configure the default watering amount, central reminders, the
+  notification target, and the optional Perenual API key.
 
-Für die feuchtigkeitsabhängige Steuerung zeigt Plantmark nur Sensoren mit der
-Home-Assistant-Geräteklasse `moisture` oder eindeutig pflanzenbezogene
-Prozent-/Feuchtesensoren an. Ist der Sensor beim Beginn des Gießzeitraums noch
-oberhalb des eingestellten Grenzwerts, wird das gesamte Fenster um die
-konfigurierte Anzahl Tage verschoben. Die Prüfung erfolgt spätestens alle 15
-Minuten.
+Watering windows use an earliest and latest day. Seasonal watering can provide
+different windows for all four meteorological seasons in the Northern
+Hemisphere: spring is March–May, summer is June–August, autumn is
+September–November, and winter is December–February.
 
-Gießerinnerungen werden einmal je Gießfenster versendet. Als Ziel stehen die
-Home-Assistant-Benachrichtigungszentrale, moderne `notify`-Entitäten und
-vorhandene klassische Notify-Dienste zur Verfügung. Plantmark benötigt dafür
-keinen externen Benachrichtigungsdienst; Pushover oder die Companion App können
-verwendet werden, wenn sie bereits in Home Assistant eingerichtet sind. Eine
-persistente Home-Assistant-Erinnerung wird beim Erfassen des Gießens automatisch
-geschlossen.
+For moisture-based scheduling, Plantmark lists sensors with the Home Assistant
+`moisture` device class and clearly plant-related percentage or humidity
+sensors. If the sensor is still above the configured threshold when the
+watering window begins, Plantmark shifts the complete window by the configured
+number of days. The condition is checked at least every 15 minutes.
 
-Der Gerätebereich von Home Assistant zeigt weiterhin die erzeugten Entitäten,
-ist aber nicht mehr für die Plantmark-Verwaltung erforderlich.
+## Central watering reminders
 
-## Optionale Perenual-Pflanzendatenbank
+Watering reminders are configured once under **Plantmark → Settings**. The
+switch and selected notification target apply to every plant. Each due plant
+sends one reminder per watering window.
 
-Plantmark funktioniert vollständig ohne Cloud-Dienst. Für die automatische
-Pflanzensuche kann zusätzlich ein persönlicher Perenual-API-Key eingerichtet
-werden:
+Available targets include Home Assistant persistent notifications, modern
+`notify` entities, and existing legacy notify services. External services such
+as Pushover or the Home Assistant Companion App can be used when they are
+already configured in Home Assistant. Recording a watering event automatically
+dismisses the corresponding persistent notification.
 
-1. Erstelle bei [Perenual](https://www.perenual.com/docs/api) einen eigenen
-   API-Key.
-2. Öffne in der Plantmark-Seitenleiste **Einstellungen**.
-3. Trage den Schlüssel unter **Perenual-Pflanzendatenbank** ein.
-4. Öffne **Pflanze hinzufügen** oder bearbeite eine vorhandene Pflanze.
-5. Suche nach einem allgemeinen oder wissenschaftlichen Pflanzennamen und
-   wähle **Daten übernehmen**.
+When upgrading from a version with per-plant reminders, Plantmark temporarily
+uses the first enabled legacy reminder and its target as the central setting.
+Saving the central settings removes the obsolete per-plant reminder fields.
 
-Der API-Key wird ausschließlich im Home-Assistant-Konfigurationseintrag
-gespeichert und niemals an die Plantmark-Browseroberfläche zurückgesendet. Die
-Suche wird nur auf ausdrückliche Benutzeraktion ausgeführt. Suchergebnisse
-werden 30 Minuten, Pflanzendetails 24 Stunden im Arbeitsspeicher
-zwischengespeichert. Bereich, Wassersensor, Notizen und lokal hochgeladene
-Bilder bleiben bei der Datenübernahme erhalten. Von Perenual gelieferte Bilder
-werden durch Home Assistant geladen, lokal unter `www/plantmark` gespeichert und
-zusammen mit der vorhandenen Lizenzangabe angezeigt. Dadurch funktionieren die
-Bilder auch dann, wenn der Browser externe Bilder blockiert.
+## Optional Perenual plant database
 
-Der kostenlose Perenual-Tarif bietet derzeit 100 Anfragen pro Tag, beschränkt
-Detaildaten aber auf Pflanzen-IDs 1–3000. Suchtreffer außerhalb dieses Bereichs
-können trotzdem als Basisdaten übernommen werden; Plantmark zeigt in diesem
-Fall an, dass ausführliche Pflegeinformationen im verwendeten Perenual-Tarif
-nicht verfügbar sind.
+Plantmark works without any cloud service. A personal Perenual API key can be
+added for plant search and care-data enrichment:
 
-Plantmark übernimmt alle von Perenual gelieferten verfügbaren Angaben, unter
-anderem Gießrhythmus, Licht, Erde, Herkunft, Pflegeaufwand, Wachstum,
-Winterhärte, Blüte, Vermehrung, essbare Eigenschaften und Giftigkeit. Fehlt bei
-einem eingeschränkten Suchtreffer der genaue Gießrhythmus, wird aus der groben
-Kategorie eine in der Oberfläche als Schätzung markierte Spanne gebildet.
-Giftigkeit wird aus Sicherheitsgründen nie geschätzt. Jeder Suchtreffer enthält
-außerdem einen direkten Link zur zugehörigen Pflanzenseite bei Perenual.
-Wenn der verwendete Perenual-Tarif den separaten Pflegeleitfaden freigibt,
-übernimmt Plantmark zusätzlich die vollständigen Texte für Wässern, Licht und
-Schnitt. Eine darin eindeutig genannte Angabe wie „every 7-10 days“ wird als
-Gießzeitraum von 7 bis 10 Tagen verwendet.
-Ist der Pflegeleitfaden-Endpunkt im Perenual-Tarif gesperrt, versucht Plantmark
-dieselben Abschnitte von der öffentlichen Perenual-Pflanzenseite zu übernehmen.
-Dieser Abruf verwendet ausschließlich die feste Perenual-Seite der ausgewählten
-Pflanzen-ID und wird wie die übrigen Detaildaten 24 Stunden zwischengespeichert.
-Vor diesem Seiten-Fallback sucht Plantmark den offiziellen Pflegeleitfaden auch
-über den wissenschaftlichen Pflanzennamen. Das hilft, wenn Perenual den
-Suchtreffer unter einer neuen v2-ID führt, der Guide aber über einen anderen
-internen Datensatz erreichbar ist.
+1. Create an API key in the [Perenual API documentation](https://www.perenual.com/docs/api).
+2. Open **Plantmark → Settings**.
+3. Enter the key under **Perenual plant database**.
+4. Add or edit a plant.
+5. Search by common or scientific name and select **Apply data**.
 
-## Veröffentlichen
+The API key remains in the Home Assistant config entry and is never returned to
+the browser. Searches run only after an explicit user action. Search results are
+cached for 30 minutes and details for 24 hours in memory.
 
-Vor der öffentlichen Veröffentlichung müssen in
-`custom_components/plantmark/manifest.json` die Felder `documentation`,
-`issue_tracker` und `codeowners` an dein GitHub-Repository angepasst werden.
+Areas, sensors, notes, and locally uploaded images are preserved when API data
+is applied. Perenual images are downloaded through Home Assistant, validated,
+and stored under `www/plantmark` with the available license attribution.
 
-Das Repository enthält:
+Plantmark imports all useful fields supplied by Perenual, including watering,
+light, soil, origin, maintenance, growth, hardiness, flowering, propagation,
+edibility, and toxicity. Toxicity is never guessed. If only a broad watering
+category is available, Plantmark creates a visibly marked estimated range.
 
-- `hacs.json` für Marketplace/HACS
-- Hassfest- und HACS-Validierung unter `.github/workflows/validate.yml`
-- automatische GitHub-Releases für Tags wie `v1.0.0`
-- lokale Brand-Grafik unter `custom_components/plantmark/brand/icon.png`
-- MIT-Lizenz und Changelog
+The Perenual Personal plan currently limits species details and care guides to
+IDs 1–3000. For restricted results, Plantmark attempts the following sources in
+order:
 
-## Voraussetzungen
+1. species details by ID;
+2. care guide by ID;
+3. care guide by scientific or common name;
+4. the selected public Perenual species page;
+5. basic search-result data.
 
-- Home Assistant 2025.8 oder neuer
-- Marketplace/HACS für die Installation aus einem benutzerdefinierten Repository
+An explicit phrase such as “every 7–10 days” is converted into a 7–10 day
+watering window. Plantmark reports when Perenual did not provide a care guide,
+so missing data is not presented as a successful full import.
 
-## Datenschutz
+## Entities
 
-Ohne die optionale Perenual-Anbindung arbeitet Plantmark vollständig lokal.
-Hochgeladene Pflanzenbilder werden unter `www/plantmark` innerhalb deiner
-Home-Assistant-Konfiguration gespeichert. Wie andere Dateien aus dem
-Home-Assistant-`www`-Verzeichnis werden sie über eine lokale statische URL
-bereitgestellt. Wenn die optionale Perenual-Anbindung aktiviert ist, werden nur
-vom Benutzer eingegebene Pflanzensuchbegriffe und ausgewählte Pflanzen-IDs an
-Perenual übertragen. Zur Anzeige eines übernommenen API-Bilds lädt der Browser
-außerdem die von Perenual bereitgestellte externe Bild-URL. Es werden keine
-Home-Assistant-Geräte-, Bereichs- oder Sensordaten übermittelt.
+Plantmark creates native Home Assistant entities for each plant, including:
 
+- last watered date;
+- beginning and end of the next watering window;
+- minimum and maximum watering interval;
+- remaining days and active season;
+- last recorded watering amount;
+- watering-due and pet-toxicity binary sensors;
+- a native **Water** button.
+
+The device page remains available for automations and dashboards, but it is not
+required for Plantmark management.
+
+## Repository and releases
+
+The repository includes:
+
+- `hacs.json` for installation as a custom HACS repository;
+- Hassfest and HACS validation in `.github/workflows/validate.yml`;
+- automated GitHub releases for tags such as `v1.4.0`;
+- local brand artwork under `custom_components/plantmark/brand`;
+- an MIT license and changelog.
+
+Before publishing a fork, update `documentation`, `issue_tracker`, and
+`codeowners` in `custom_components/plantmark/manifest.json`.
+
+## Requirements
+
+- Home Assistant 2025.8 or newer
+- HACS for installation from a custom GitHub repository
+
+## Privacy
+
+Without Perenual, Plantmark operates entirely within Home Assistant. Uploaded
+images are stored under `www/plantmark` in the Home Assistant configuration.
+Like other files in the Home Assistant `www` directory, they are available from
+a local static URL.
+
+When Perenual is enabled, only user-entered search terms, selected species IDs,
+and the related public Perenual page are requested from Perenual. Plantmark does
+not transmit Home Assistant devices, areas, sensors, or plant notes.

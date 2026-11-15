@@ -3,6 +3,14 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.4.0 - 2026-11-15
+
+- Move watering reminders from individual plants to one central Plantmark
+  switch and notification target in the sidebar settings.
+- Migrate an existing enabled per-plant reminder and target automatically until
+  the central settings are saved, then remove the obsolete per-plant fields.
+- Rewrite the complete README in English.
+
 ## 1.3.3 - 2026-11-15
 
 - Retry Perenual's official care-guide API by scientific or common plant name

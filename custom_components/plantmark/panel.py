@@ -22,12 +22,14 @@ from homeassistant.helpers import device_registry as dr
 from .api import PerenualClient, clear_perenual_client, get_perenual_client
 from .const import (
     CONF_DEFAULT_WATER_AMOUNT,
+    CONF_NOTIFICATION_TARGET,
     CONF_PERENUAL_API_KEY,
     CONF_PLANTS,
+    CONF_WATERING_REMINDER_ENABLED,
     DEFAULT_WATER_AMOUNT,
     DOMAIN,
 )
-from .plant import new_plant, parse_import, updated_plant
+from .plant import global_reminder_settings, new_plant, parse_import, updated_plant
 
 PANEL_URL = "plantmark"
 PANEL_ELEMENT = "plantmark-panel"
@@ -133,6 +135,9 @@ def websocket_list(
         ),
         key=lambda item: item["name"].casefold(),
     )
+    reminder_enabled, notification_target = global_reminder_settings(
+        dict(entry.options)
+    )
     connection.send_result(
         msg["id"],
         {
@@ -143,6 +148,8 @@ def websocket_list(
                 CONF_DEFAULT_WATER_AMOUNT: entry.options.get(
                     CONF_DEFAULT_WATER_AMOUNT, DEFAULT_WATER_AMOUNT
                 ),
+                CONF_WATERING_REMINDER_ENABLED: reminder_enabled,
+                CONF_NOTIFICATION_TARGET: notification_target,
                 "perenual_configured": bool(entry.data.get(CONF_PERENUAL_API_KEY)),
             },
         },
@@ -308,6 +315,10 @@ async def websocket_import(
         vol.Required("default_water_amount_ml"): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=10000)
         ),
+        vol.Required("watering_reminder_enabled"): bool,
+        vol.Optional("notification_target", default=""): vol.All(
+            str, vol.Strip, vol.Length(max=255)
+        ),
         vol.Optional("perenual_api_key"): vol.All(str, vol.Strip, vol.Length(max=512)),
         vol.Optional("remove_perenual_api_key", default=False): bool,
     }
@@ -323,6 +334,24 @@ def websocket_settings(
     entry = _config_entry(hass)
     options = dict(entry.options)
     options[CONF_DEFAULT_WATER_AMOUNT] = msg["default_water_amount_ml"]
+    reminder_enabled = msg["watering_reminder_enabled"]
+    notification_target = msg["notification_target"]
+    if reminder_enabled:
+        valid_targets = {item["id"] for item in _notification_targets(hass)}
+        if not notification_target:
+            raise HomeAssistantError("Select a notification target for reminders")
+        if notification_target not in valid_targets:
+            raise HomeAssistantError(
+                "The selected notification target is unavailable"
+            )
+    options[CONF_WATERING_REMINDER_ENABLED] = reminder_enabled
+    options[CONF_NOTIFICATION_TARGET] = notification_target
+    plants = deepcopy(list(options.get(CONF_PLANTS, [])))
+    for plant in plants:
+        if isinstance(plant, dict):
+            plant.pop("watering_reminder_enabled", None)
+            plant.pop("notification_target", None)
+    options[CONF_PLANTS] = plants
     data = dict(entry.data)
     key_changed = False
     if msg.get("remove_perenual_api_key"):
@@ -434,14 +463,6 @@ def _validate_plant_values(hass: HomeAssistant, values: dict[str, Any]) -> None:
     if not 1 <= delay <= 30:
         raise HomeAssistantError("Moisture delay must be between 1 and 30 days")
 
-    target = str(values.get("notification_target") or "")
-    if values.get("watering_reminder_enabled"):
-        if not target:
-            raise HomeAssistantError("Select a notification target for reminders")
-        valid_targets = {item["id"] for item in _notification_targets(hass)}
-        if target not in valid_targets:
-            raise HomeAssistantError("The selected notification target is unavailable")
-
 
 def _validate_watering_ranges(values: dict[str, Any]) -> None:
     ranges = [("watering_interval_min_days", "watering_interval_max_days")]
@@ -459,7 +480,8 @@ def _validate_watering_ranges(values: dict[str, Any]) -> None:
         maximum = _integer(values.get(maximum_field), minimum)
         if not 1 <= minimum <= maximum <= 365:
             raise HomeAssistantError(
-                "Watering intervals must be between 1 and 365 days and minimum must not exceed maximum"
+                "Watering intervals must be between 1 and 365 days and the "
+                "minimum must not exceed the maximum"
             )
 
 

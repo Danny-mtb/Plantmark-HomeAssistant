@@ -14,7 +14,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_PLANTS, DOMAIN
-from .plant import season_for_month, watering_interval_range
+from .plant import (
+    global_reminder_settings,
+    season_for_month,
+    watering_interval_range,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -141,20 +145,18 @@ class PlantmarkDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, A
     async def _async_send_watering_reminders(
         self, plants: list[dict[str, Any]]
     ) -> bool:
-        """Send each configured native Home Assistant reminder once."""
+        """Send each due reminder to the central Plantmark target once."""
+        enabled, target = global_reminder_settings(dict(self.entry.options))
+        if not enabled or not target:
+            return False
         now = dt_util.now()
         changed = False
         for plant in plants:
-            if not plant.get("watering_reminder_enabled"):
-                continue
             start = _as_datetime(plant.get("next_watering"))
             if start is None or now < start:
                 continue
             marker = start.isoformat()
             if plant.get("last_notification_for") == marker:
-                continue
-            target = str(plant.get("notification_target") or "").strip()
-            if not target:
                 continue
             try:
                 await self._async_send_notification(plant, target)

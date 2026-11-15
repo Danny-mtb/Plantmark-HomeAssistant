@@ -9,7 +9,12 @@ from uuid import uuid4
 
 from homeassistant.util import dt as dt_util
 
-from .const import DEFAULT_WATERING_INTERVAL
+from .const import (
+    CONF_NOTIFICATION_TARGET,
+    CONF_PLANTS,
+    CONF_WATERING_REMINDER_ENABLED,
+    DEFAULT_WATERING_INTERVAL,
+)
 
 SEASONS = ("spring", "summer", "autumn", "winter")
 
@@ -86,14 +91,12 @@ _API_BOOL_FIELDS = (
     "cuisine",
 )
 _PLANT_TEXT_FIELDS = (
-    "notification_target",
     "last_notification_for",
     "last_moisture_adjustment",
 )
 _PLANT_BOOL_FIELDS = (
     "seasonal_watering_enabled",
     "moisture_control_enabled",
-    "watering_reminder_enabled",
 )
 _PLANT_INT_FIELDS = (
     "watering_interval_min_days",
@@ -270,6 +273,34 @@ def season_for_month(month: int) -> str:
     if month in (9, 10, 11):
         return "autumn"
     return "winter"
+
+
+def global_reminder_settings(options: dict[str, Any]) -> tuple[bool, str]:
+    """Return global reminders while migrating legacy per-plant settings."""
+    plants = options.get(CONF_PLANTS, [])
+    legacy_plants = plants if isinstance(plants, list) else []
+    configured_enabled = options.get(CONF_WATERING_REMINDER_ENABLED)
+    enabled = (
+        configured_enabled
+        if isinstance(configured_enabled, bool)
+        else any(
+            isinstance(plant, dict) and plant.get("watering_reminder_enabled")
+            for plant in legacy_plants
+        )
+    )
+    target = str(options.get(CONF_NOTIFICATION_TARGET) or "").strip()
+    if not target:
+        target = next(
+            (
+                str(plant.get("notification_target") or "").strip()
+                for plant in legacy_plants
+                if isinstance(plant, dict)
+                and plant.get("watering_reminder_enabled")
+                and plant.get("notification_target")
+            ),
+            "",
+        )
+    return bool(enabled), target
 
 
 def _copy_schedule_values(values: dict[str, Any]) -> dict[str, Any]:

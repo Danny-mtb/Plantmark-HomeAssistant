@@ -113,6 +113,8 @@ const TEXT = {
     moistureDelay: "Bei ausreichender Feuchte verschieben um",
     moistureHelp: "Nur passende Bodenfeuchte- und Feuchtigkeitssensoren werden angezeigt.",
     reminder: "Gießerinnerung aktivieren",
+    centralReminders: "Zentrale Gießerinnerungen",
+    centralReminderHelp: "Diese Einstellung gilt für alle Pflanzen. Jede fällige Pflanze erzeugt einmal pro Gießzeitraum eine Nachricht am ausgewählten Ziel.",
     notificationTarget: "Benachrichtigung senden an",
     notificationHelp: "Verwendet ausschließlich Home-Assistant-Benachrichtigungen und vorhandene Notify-Integrationen.",
     selectNotification: "Benachrichtigungsziel auswählen",
@@ -232,6 +234,8 @@ const TEXT = {
     moistureDelay: "When moist, postpone by",
     moistureHelp: "Only matching soil-moisture and humidity sensors are shown.",
     reminder: "Enable watering reminder",
+    centralReminders: "Central watering reminders",
+    centralReminderHelp: "This setting applies to every plant. Each due plant sends one message per watering window to the selected target.",
     notificationTarget: "Send notification to",
     notificationHelp: "Uses only Home Assistant notifications and configured notify integrations.",
     selectNotification: "Select notification target",
@@ -405,13 +409,11 @@ class PlantmarkPanel extends HTMLElement {
     const isEdit = Boolean(plant?.id);
     const areaOptions = (this._data.areas || []).map((area) => `<option value="${escapeHtml(area.id)}" ${area.id === plant?.area_id ? "selected" : ""}>${escapeHtml(area.name)}</option>`).join("");
     const sensorOptions = this._sensorOptions(plant?.water_sensor_entity_id);
-    const notificationOptions = this._notificationOptions(plant?.notification_target);
     const preview = this._pendingImage || plant?.image_url;
     const intervalMin = Number(plant?.watering_interval_min_days || plant?.watering_interval_days || 7);
     const intervalMax = Number(plant?.watering_interval_max_days || intervalMin);
     const seasonal = Boolean(plant?.seasonal_watering_enabled);
     const moistureControl = Boolean(plant?.moisture_control_enabled);
-    const reminder = Boolean(plant?.watering_reminder_enabled);
     const seasonalFields = ["spring", "summer", "autumn", "winter"].map((season) => {
       const minimum = Number(plant?.[`watering_interval_${season}_min_days`] || intervalMin);
       const maximum = Number(plant?.[`watering_interval_${season}_max_days`] || intervalMax);
@@ -432,7 +434,6 @@ class PlantmarkPanel extends HTMLElement {
             <label class="field"><span>${t.intervalMax}</span><div class="number-suffix"><input name="watering_interval_max_days" type="number" min="1" max="365" required value="${intervalMax}"><span>${t.days}</span></div></label>
             <div class="field full advanced-block"><label class="check"><input id="seasonal-watering" name="seasonal_watering_enabled" type="checkbox" ${seasonal ? "checked" : ""}> ${t.seasonalWatering}</label><small>${t.seasonalHelp}</small><div class="season-grid" data-enabled-by="seasonal-watering">${seasonalFields}</div></div>
             <div class="field full advanced-block"><label class="check"><input id="moisture-control" name="moisture_control_enabled" type="checkbox" ${moistureControl ? "checked" : ""}> ${t.moistureControl}</label><small>${t.moistureHelp}</small><div class="conditional-grid" data-enabled-by="moisture-control"><label class="field"><span>${t.moistureThreshold}</span><div class="number-suffix"><input name="moisture_threshold_percent" type="number" min="0" max="100" value="${Number(plant?.moisture_threshold_percent ?? 35)}"><span>%</span></div></label><label class="field"><span>${t.moistureDelay}</span><div class="number-suffix"><input name="moisture_delay_days" type="number" min="1" max="30" value="${Number(plant?.moisture_delay_days || 1)}"><span>${t.days}</span></div></label></div></div>
-            <div class="field full advanced-block"><label class="check"><input id="watering-reminder" name="watering_reminder_enabled" type="checkbox" ${reminder ? "checked" : ""}> ${t.reminder}</label><small>${t.notificationHelp}</small><div data-enabled-by="watering-reminder"><label class="field"><span>${t.notificationTarget}</span><select name="notification_target"><option value="">${t.selectNotification}</option>${notificationOptions}</select></label></div></div>
             <div class="field image-field"><span>${t.image}</span><div class="image-upload">${preview ? `<img id="image-preview" src="${escapeHtml(preview)}" alt="">` : `<div id="image-preview" class="mini-placeholder"><ha-icon icon="mdi:image-plus"></ha-icon></div>`}<label class="upload-button"><ha-icon icon="mdi:upload"></ha-icon>${t.image}<input id="image-input" type="file" accept="image/*"></label></div><small>${t.imageHelp}</small>${plant?.image_url ? `<label class="check"><input name="remove_image" type="checkbox"> ${t.removeImage}</label>` : ""}</div>
             <label class="field full"><span>${t.notes}</span><textarea name="notes" rows="3">${escapeHtml(plant?.notes || "")}</textarea></label>
             <div class="field full checks"><label class="check"><input name="is_toxic_to_cats" type="checkbox" ${plant?.is_toxic_to_cats ? "checked" : ""}> <ha-icon icon="mdi:cat"></ha-icon>${t.toxicCats}</label><label class="check"><input name="is_toxic_to_dogs" type="checkbox" ${plant?.is_toxic_to_dogs ? "checked" : ""}> <ha-icon icon="mdi:dog"></ha-icon>${t.toxicDogs}</label></div>
@@ -480,7 +481,26 @@ class PlantmarkPanel extends HTMLElement {
     const t = this._t;
     const amount = Number(this._data.settings?.default_water_amount_ml || 0);
     const configured = Boolean(this._data.settings?.perenual_configured);
-    return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><div class="modal-header"><div><h2>${t.settingsTitle}</h2><p>${t.amountHelp}</p></div><button class="icon-button close"><ha-icon icon="mdi:close"></ha-icon></button></div><form id="settings-form"><label class="field"><span>${t.defaultAmount}</span><input name="amount" type="number" min="0" max="10000" value="${amount}" required></label><section class="api-settings"><div class="api-settings-heading"><div><h3>${t.perenualTitle}</h3><p>${t.perenualDescription}</p></div><span class="api-status ${configured ? "connected" : ""}"><ha-icon icon="${configured ? "mdi:check-circle" : "mdi:minus-circle-outline"}"></ha-icon>${configured ? t.perenualConfigured : t.perenualMissing}</span></div><label class="field"><span>${t.perenualKey}</span><input name="perenual_api_key" type="password" maxlength="512" autocomplete="off" placeholder="${configured ? "••••••••" : ""}"><small>${t.perenualKeyHelp} <a href="https://www.perenual.com/docs/api" target="_blank" rel="noreferrer">${t.getApiKey}</a></small></label>${configured ? `<label class="check remove-api"><input name="remove_perenual_api_key" type="checkbox"> ${t.removePerenualKey}</label>` : ""}</section><div class="modal-actions"><button type="button" class="secondary close">${t.cancel}</button><button type="submit" class="primary"><ha-icon icon="mdi:content-save-outline"></ha-icon>${t.save}</button></div></form></section></div>`;
+    const reminder = Boolean(this._data.settings?.watering_reminder_enabled);
+    const selectedTarget = String(this._data.settings?.notification_target || "");
+    const notificationOptions = this._notificationOptions(selectedTarget);
+    return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header"><div><h2>${t.settingsTitle}</h2><p>${t.amountHelp}</p></div><button class="icon-button close"><ha-icon icon="mdi:close"></ha-icon></button></div>
+      <form id="settings-form">
+        <label class="field"><span>${t.defaultAmount}</span><input name="amount" type="number" min="0" max="10000" value="${amount}" required></label>
+        <section class="api-settings">
+          <div class="api-settings-heading"><div><h3>${t.centralReminders}</h3><p>${t.centralReminderHelp}</p></div></div>
+          <label class="check"><input id="global-watering-reminder" name="watering_reminder_enabled" type="checkbox" ${reminder ? "checked" : ""}> ${t.reminder}</label>
+          <div data-enabled-by="global-watering-reminder"><label class="field"><span>${t.notificationTarget}</span><select name="notification_target"><option value="">${t.selectNotification}</option>${notificationOptions}</select><small>${t.notificationHelp}</small></label></div>
+        </section>
+        <section class="api-settings">
+          <div class="api-settings-heading"><div><h3>${t.perenualTitle}</h3><p>${t.perenualDescription}</p></div><span class="api-status ${configured ? "connected" : ""}"><ha-icon icon="${configured ? "mdi:check-circle" : "mdi:minus-circle-outline"}"></ha-icon>${configured ? t.perenualConfigured : t.perenualMissing}</span></div>
+          <label class="field"><span>${t.perenualKey}</span><input name="perenual_api_key" type="password" maxlength="512" autocomplete="off" placeholder="${configured ? "••••••••" : ""}"><small>${t.perenualKeyHelp} <a href="https://www.perenual.com/docs/api" target="_blank" rel="noreferrer">${t.getApiKey}</a></small></label>
+          ${configured ? `<label class="check remove-api"><input name="remove_perenual_api_key" type="checkbox"> ${t.removePerenualKey}</label>` : ""}
+        </section>
+        <div class="modal-actions"><button type="button" class="secondary close">${t.cancel}</button><button type="submit" class="primary"><ha-icon icon="mdi:content-save-outline"></ha-icon>${t.save}</button></div>
+      </form>
+    </section></div>`;
   }
 
   _bindEvents() {
@@ -504,7 +524,7 @@ class PlantmarkPanel extends HTMLElement {
     this.shadowRoot.querySelector("#api-search")?.addEventListener("click", () => this._searchApi());
     this.shadowRoot.querySelector("#api-query")?.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); this._searchApi(); } });
     this.shadowRoot.querySelectorAll(".apply-api").forEach((button) => button.addEventListener("click", () => this._applyApi(Number(button.dataset.speciesId))));
-    ["seasonal-watering", "moisture-control", "watering-reminder"].forEach((id) => this.shadowRoot.querySelector(`#${id}`)?.addEventListener("change", () => this._toggleConditionalFields()));
+    ["seasonal-watering", "moisture-control", "global-watering-reminder"].forEach((id) => this.shadowRoot.querySelector(`#${id}`)?.addEventListener("change", () => this._toggleConditionalFields()));
     this._toggleConditionalFields();
   }
 
@@ -566,8 +586,6 @@ class PlantmarkPanel extends HTMLElement {
       moisture_control_enabled: form.get("moisture_control_enabled") === "on",
       moisture_threshold_percent: Number(form.get("moisture_threshold_percent")) || 0,
       moisture_delay_days: Number(form.get("moisture_delay_days")) || 1,
-      watering_reminder_enabled: form.get("watering_reminder_enabled") === "on",
-      notification_target: String(form.get("notification_target") || ""),
       notes: String(form.get("notes") || "").trim(),
       is_toxic_to_cats: form.get("is_toxic_to_cats") === "on",
       is_toxic_to_dogs: form.get("is_toxic_to_dogs") === "on",
@@ -753,7 +771,6 @@ class PlantmarkPanel extends HTMLElement {
       "watering_interval_min_days", "watering_interval_max_days",
       "seasonal_watering_enabled", "moisture_control_enabled",
       "moisture_threshold_percent", "moisture_delay_days",
-      "watering_reminder_enabled", "notification_target",
     ];
     for (const season of ["spring", "summer", "autumn", "winter"]) {
       fields.push(`watering_interval_${season}_min_days`, `watering_interval_${season}_max_days`);
@@ -806,7 +823,14 @@ class PlantmarkPanel extends HTMLElement {
     const amount = Number(form.get("amount"));
     const apiKey = String(form.get("perenual_api_key") || "").trim();
     try {
-      await this._hass.callWS({ type: "plantmark/settings", default_water_amount_ml: amount, perenual_api_key: apiKey || undefined, remove_perenual_api_key: form.get("remove_perenual_api_key") === "on" });
+      await this._hass.callWS({
+        type: "plantmark/settings",
+        default_water_amount_ml: amount,
+        watering_reminder_enabled: form.get("watering_reminder_enabled") === "on",
+        notification_target: String(form.get("notification_target") || ""),
+        perenual_api_key: apiKey || undefined,
+        remove_perenual_api_key: form.get("remove_perenual_api_key") === "on",
+      });
       this._closeModal();
       await this._load();
       this._showToast(this._t.settingsSaved);
