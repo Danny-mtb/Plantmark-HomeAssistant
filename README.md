@@ -134,6 +134,10 @@ einem eingeschränkten Suchtreffer der genaue Gießrhythmus, wird aus der groben
 Kategorie eine in der Oberfläche als Schätzung markierte Spanne gebildet.
 Giftigkeit wird aus Sicherheitsgründen nie geschätzt. Jeder Suchtreffer enthält
 außerdem einen direkten Link zur zugehörigen Pflanzenseite bei Perenual.
+Wenn der verwendete Perenual-Tarif den separaten Pflegeleitfaden freigibt,
+übernimmt Plantmark zusätzlich die vollständigen Texte für Wässern, Licht und
+Schnitt. Eine darin eindeutig genannte Angabe wie „every 7-10 days“ wird als
+Gießzeitraum von 7 bis 10 Tagen verwendet.
 
 ## Veröffentlichen
 

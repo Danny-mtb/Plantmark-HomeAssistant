@@ -20,6 +20,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 
 API_BASE_URL = "https://www.perenual.com/api/v2"
+CARE_GUIDE_URL = "https://www.perenual.com/api/species-care-guide-list"
 REQUEST_TIMEOUT = ClientTimeout(total=20)
 SEARCH_CACHE_SECONDS = 30 * 60
 DETAIL_CACHE_SECONDS = 24 * 60 * 60
@@ -80,14 +81,40 @@ class PerenualClient:
         return await self._async_cached(cache_key, SEARCH_CACHE_SECONDS, _request)
 
     async def async_details(self, species_id: int) -> dict[str, Any]:
-        """Load normalized plant care data for one species."""
+        """Load and merge botanical details with the separate care guide."""
         cache_key = f"details:{species_id}"
 
         async def _request() -> dict[str, Any]:
-            payload = await self._async_get(f"species/details/{species_id}")
-            if not isinstance(payload, dict) or payload.get("id") is None:
-                raise PerenualApiError("Perenual returned invalid plant details")
-            return _plant_details(payload)
+            detail_result, guide_result = await asyncio.gather(
+                self._async_get(f"species/details/{species_id}"),
+                self._async_get_url(CARE_GUIDE_URL, {"species_id": species_id}),
+                return_exceptions=True,
+            )
+            details: dict[str, Any] = {}
+            errors: list[PerenualApiError] = []
+            if isinstance(detail_result, Exception):
+                if isinstance(detail_result, PerenualApiError):
+                    errors.append(detail_result)
+            elif (
+                isinstance(detail_result, dict)
+                and detail_result.get("id") is not None
+            ):
+                details.update(_plant_details(detail_result))
+            guide = (
+                _care_guide_data(guide_result, species_id)
+                if isinstance(guide_result, dict)
+                else {}
+            )
+            details.update(guide)
+            if details:
+                details.setdefault("api_provider", "perenual")
+                details.setdefault("perenual_id", species_id)
+                details.setdefault("perenual_url", _perenual_url(species_id))
+                details.setdefault("api_last_synced", dt_util.now().isoformat())
+                return details
+            if errors:
+                raise errors[0]
+            raise PerenualApiError("Perenual returned no plant care data")
 
         return await self._async_cached(cache_key, DETAIL_CACHE_SECONDS, _request)
 
@@ -135,10 +162,16 @@ class PerenualClient:
     async def _async_get(
         self, path: str, parameters: dict[str, Any] | None = None
     ) -> Any:
+        return await self._async_get_url(f"{API_BASE_URL}/{path}", parameters)
+
+    async def _async_get_url(
+        self, url: str, parameters: dict[str, Any] | None = None
+    ) -> Any:
+        """Request one of Perenual's official API endpoints."""
         params = {"key": self._api_key, **(parameters or {})}
         try:
             async with self._session.get(
-                f"{API_BASE_URL}/{path}", params=params, timeout=REQUEST_TIMEOUT
+                url, params=params, timeout=REQUEST_TIMEOUT
             ) as response:
                 if response.status in (401, 403):
                     raise PerenualApiError("The Perenual API key is invalid")
@@ -238,6 +271,53 @@ def _plant_details(payload: dict[str, Any]) -> dict[str, Any]:
         "watering_interval_estimated": False,
         **image,
     }
+
+
+def _care_guide_data(payload: dict[str, Any], species_id: int) -> dict[str, Any]:
+    """Normalize the independent Perenual plant-guide response."""
+    data = payload.get("data")
+    if not isinstance(data, list):
+        return {}
+    record = next(
+        (
+            item
+            for item in data
+            if isinstance(item, dict)
+            and _optional_int(item.get("species_id")) == species_id
+        ),
+        None,
+    )
+    if not isinstance(record, dict) or not isinstance(record.get("section"), list):
+        return {}
+
+    guides: dict[str, str] = {}
+    for section in record["section"]:
+        if not isinstance(section, dict):
+            continue
+        guide_type = _text(section.get("type"))
+        description = _text(section.get("description"))
+        if guide_type and description:
+            guides[guide_type.casefold()] = description
+
+    normalized = {
+        f"{guide_type}_guide": description
+        for guide_type, description in guides.items()
+        if guide_type in {"watering", "sunlight", "pruning"}
+    }
+    watering_minimum, watering_maximum = _interval_from_watering_guide(
+        guides.get("watering")
+    )
+    if watering_minimum is not None:
+        normalized.update(
+            {
+                "watering_interval_days": watering_minimum,
+                "watering_interval_min_days": watering_minimum,
+                "watering_interval_max_days": watering_maximum,
+                "watering_interval_estimated": False,
+                "watering_interval_source": "care_guide",
+            }
+        )
+    return normalized
 
 
 def _normalized_plant_data(payload: dict[str, Any]) -> dict[str, Any]:
@@ -425,6 +505,27 @@ def _watering_category_range(value: Any) -> tuple[int | None, int | None]:
     return ranges.get(str(value or "").strip().casefold(), (None, None))
 
 
+def _interval_from_watering_guide(value: Any) -> tuple[int | None, int | None]:
+    """Extract only an explicit every-N-days/weeks/months guide statement."""
+    text = _text(value)
+    if text is None:
+        return None, None
+    match = re.search(
+        r"(?:once\s+)?every\s+(\d+)\s*(?:[-–—]|to)?\s*(\d+)?\s*"
+        r"(day|week|month)s?\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None, None
+    minimum = int(match.group(1))
+    maximum = int(match.group(2) or minimum)
+    multiplier = {"day": 1, "week": 7, "month": 30}[match.group(3).casefold()]
+    minimum = max(1, min(365, minimum * multiplier))
+    maximum = max(minimum, min(365, maximum * multiplier))
+    return minimum, maximum
+
+
 def _nested_text(value: Any, key: str) -> str | None:
     return _text(value.get(key)) if isinstance(value, dict) else None
 
@@ -454,6 +555,13 @@ def _joined_text(value: Any) -> str | None:
 
 def _optional_bool(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _perenual_url(species_id: Any) -> str:

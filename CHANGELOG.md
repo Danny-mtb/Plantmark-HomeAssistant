@@ -3,6 +3,12 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.3.1 - 2026-11-15
+
+- Load Perenual's separate plant-care guide, display its watering, sunlight and
+  pruning texts, and apply explicit intervals such as "every 7-10 days" to the
+  Plantmark watering window.
+
 ## 1.3.0 - 2026-11-15
 
 - Import and retain substantially more Perenual care data, including growth,

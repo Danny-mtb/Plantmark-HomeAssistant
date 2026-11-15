@@ -83,6 +83,9 @@ const TEXT = {
     dimensions: "Größe",
     attracts: "Zieht an",
     wateringPeriod: "Gießzeitpunkt",
+    wateringGuide: "Hinweise zum Wässern",
+    sunlightGuide: "Hinweise zum Licht",
+    pruningGuide: "Hinweise zum Schneiden",
     wateringQuality: "Wasserqualität",
     temperature: "Temperatur",
     phLevel: "pH-Wert",
@@ -198,6 +201,9 @@ const TEXT = {
     dimensions: "Size",
     attracts: "Attracts",
     wateringPeriod: "Watering period",
+    wateringGuide: "Watering guidance",
+    sunlightGuide: "Sunlight guidance",
+    pruningGuide: "Pruning guidance",
     wateringQuality: "Water quality",
     temperature: "Temperature",
     phLevel: "pH level",
@@ -377,6 +383,7 @@ class PlantmarkPanel extends HTMLElement {
           ${careFacts ? `<div class="care-facts">${careFacts}</div>` : ""}
           ${warnings ? `<div class="warnings">${warnings}</div>` : ""}
           ${plant.description ? `<details class="api-description"><summary>${t.apiDescription}</summary><p>${escapeHtml(plant.description)}</p></details>` : ""}
+          ${this._guideHtml(plant)}
           ${plant.notes ? `<p class="notes">${escapeHtml(plant.notes)}</p>` : ""}
           <div class="card-actions"><button class="water"><ha-icon icon="mdi:watering-can"></ha-icon>${t.water}</button><button class="danger delete" title="${t.delete}"><ha-icon icon="mdi:trash-can-outline"></ha-icon></button></div>
         </div>
@@ -663,6 +670,8 @@ class PlantmarkPanel extends HTMLElement {
       "water_volume_requirement", "average_volume_requirement", "base_temperature",
       "ph_level", "sunlight_duration", "temperature_tolerance",
       "spacing_requirement", "seeds", "flower_color", "fruit_color",
+      "watering_guide", "sunlight_guide", "pruning_guide",
+      "watering_interval_source",
     ];
     return Object.fromEntries(fields.filter((field) => Object.hasOwn(plant, field)).map((field) => [field, plant[field]]));
   }
@@ -846,6 +855,15 @@ class PlantmarkPanel extends HTMLElement {
     if (plant.ph_level) facts.push(["mdi:ph", this._t.phLevel, plant.ph_level]);
     if (plant.watering_interval_estimated) facts.push(["mdi:approximately-equal", this._t.estimatedInterval, this._t.estimatedInterval]);
     return facts.map(([icon, label, value]) => `<span class="care-fact" title="${escapeHtml(label)}"><ha-icon icon="${icon}"></ha-icon>${escapeHtml(value)}</span>`).join("");
+  }
+
+  _guideHtml(plant) {
+    const guides = [
+      [this._t.wateringGuide, plant.watering_guide],
+      [this._t.sunlightGuide, plant.sunlight_guide],
+      [this._t.pruningGuide, plant.pruning_guide],
+    ].filter(([, value]) => value);
+    return guides.map(([title, value]) => `<details class="api-description"><summary>${escapeHtml(title)}</summary><p>${escapeHtml(value)}</p></details>`).join("");
   }
 
   _sensorName(state) {
