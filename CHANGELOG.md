@@ -3,6 +3,17 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.3.0 - 2026-11-15
+
+- Import and retain substantially more Perenual care data, including growth,
+  maintenance, hardiness, flowering, propagation, edible and tolerance fields.
+- Derive a clearly marked watering-window estimate from the broad watering
+  category when a plan-restricted search result has no detailed benchmark.
+- Add a direct link from every search result to its Perenual plant page.
+- Follow Perenual image-cloud redirects and detect image formats by content so
+  actual API thumbnails replace the generic search icon.
+- Continue to import pet toxicity only when Perenual explicitly supplies it.
+
 ## 1.2.3 - 2026-11-15
 
 - Publish the Perenual image proxy, local API-image storage and free-plan detail

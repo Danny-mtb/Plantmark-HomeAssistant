@@ -127,6 +127,14 @@ können trotzdem als Basisdaten übernommen werden; Plantmark zeigt in diesem
 Fall an, dass ausführliche Pflegeinformationen im verwendeten Perenual-Tarif
 nicht verfügbar sind.
 
+Plantmark übernimmt alle von Perenual gelieferten verfügbaren Angaben, unter
+anderem Gießrhythmus, Licht, Erde, Herkunft, Pflegeaufwand, Wachstum,
+Winterhärte, Blüte, Vermehrung, essbare Eigenschaften und Giftigkeit. Fehlt bei
+einem eingeschränkten Suchtreffer der genaue Gießrhythmus, wird aus der groben
+Kategorie eine in der Oberfläche als Schätzung markierte Spanne gebildet.
+Giftigkeit wird aus Sicherheitsgründen nie geschätzt. Jeder Suchtreffer enthält
+außerdem einen direkten Link zur zugehörigen Pflanzenseite bei Perenual.
+
 ## Veröffentlichen
 
 Vor der öffentlichen Veröffentlichung müssen in

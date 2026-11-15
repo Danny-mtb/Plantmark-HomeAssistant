@@ -60,6 +60,7 @@ const TEXT = {
     searching: "Suche läuft …",
     noResults: "Keine passenden Pflanzen gefunden.",
     applyData: "Daten übernehmen",
+    openDatabaseEntry: "Pflanzenseite öffnen",
     dataApplied: "Pflegedaten wurden übernommen",
     basicDataApplied: "Basisdaten wurden übernommen. Perenual stellt die Detaildaten für diese Pflanze in deinem Tarif nicht bereit.",
     paidDetails: "Detaildaten eventuell nur mit kostenpflichtigem Perenual-Tarif",
@@ -72,6 +73,19 @@ const TEXT = {
     origin: "Herkunft",
     family: "Familie",
     apiDescription: "Pflegeinformationen",
+    estimatedInterval: "Geschätzter Gießzeitraum",
+    growthRate: "Wachstum",
+    maintenance: "Pflegeaufwand",
+    hardiness: "Winterhärtezone",
+    propagation: "Vermehrung",
+    floweringSeason: "Blütezeit",
+    pests: "Anfällig für",
+    dimensions: "Größe",
+    attracts: "Zieht an",
+    wateringPeriod: "Gießzeitpunkt",
+    wateringQuality: "Wasserqualität",
+    temperature: "Temperatur",
+    phLevel: "pH-Wert",
     perenualTitle: "Perenual-Pflanzendatenbank",
     perenualDescription: "Optional: Suche Pflanzen und übernimm Pflegeinformationen automatisch. Der API-Key bleibt in Home Assistant.",
     perenualKey: "Persönlicher Perenual-API-Key",
@@ -161,6 +175,7 @@ const TEXT = {
     searching: "Searching …",
     noResults: "No matching plants found.",
     applyData: "Apply data",
+    openDatabaseEntry: "Open plant page",
     dataApplied: "Plant care data applied",
     basicDataApplied: "Basic data was applied. Perenual does not provide this plant's details with your current plan.",
     paidDetails: "Details may require a paid Perenual plan",
@@ -173,6 +188,19 @@ const TEXT = {
     origin: "Origin",
     family: "Family",
     apiDescription: "Care information",
+    estimatedInterval: "Estimated watering window",
+    growthRate: "Growth",
+    maintenance: "Maintenance",
+    hardiness: "Hardiness zone",
+    propagation: "Propagation",
+    floweringSeason: "Flowering season",
+    pests: "Susceptible to",
+    dimensions: "Size",
+    attracts: "Attracts",
+    wateringPeriod: "Watering period",
+    wateringQuality: "Water quality",
+    temperature: "Temperature",
+    phLevel: "pH level",
     perenualTitle: "Perenual plant database",
     perenualDescription: "Optional: Search plants and automatically apply care information. The API key stays in Home Assistant.",
     perenualKey: "Personal Perenual API key",
@@ -427,7 +455,10 @@ class PlantmarkPanel extends HTMLElement {
         : `<span class="api-result-placeholder"><ha-icon icon="mdi:sprout"></ha-icon></span>`;
       const planHint = Number(result.id) > 3000 ? this._t.paidDetails : null;
       const details = [result.scientific_name, result.watering, ...(result.sunlight || []).slice(0, 1), planHint].filter(Boolean).map(escapeHtml).join(" · ");
-      return `<article class="api-result">${image}<div><strong>${escapeHtml(result.common_name || result.scientific_name || `#${result.id}`)}</strong><span>${details}</span></div><button type="button" class="primary apply-api" data-species-id="${Number(result.id)}">${this._t.applyData}</button></article>`;
+      const pageUrl = /^https:\/\/www\.perenual\.com\//.test(result.perenual_url || "")
+        ? result.perenual_url
+        : `https://www.perenual.com/plant-species-database-search-finder/species/${Number(result.id)}`;
+      return `<article class="api-result">${image}<div class="api-result-copy"><strong>${escapeHtml(result.common_name || result.scientific_name || `#${result.id}`)}</strong><span>${details}</span></div><div class="api-result-actions"><a class="secondary api-page-link" href="${escapeHtml(pageUrl)}" target="_blank" rel="noreferrer" title="${this._t.openDatabaseEntry}" aria-label="${this._t.openDatabaseEntry}"><ha-icon icon="mdi:open-in-new"></ha-icon></a><button type="button" class="primary apply-api" data-species-id="${Number(result.id)}">${this._t.applyData}</button></div></article>`;
     }).join("")}</div>`;
   }
 
@@ -621,6 +652,17 @@ class PlantmarkPanel extends HTMLElement {
       "other_names", "family", "origin", "plant_type", "cycle", "watering",
       "sunlight", "soil", "care_level", "description", "poisonous_to_pets",
       "poisonous_to_humans", "indoor", "image_license_name", "image_license_url",
+      "perenual_url", "watering_interval_estimated", "growth_rate", "maintenance",
+      "hardiness_min", "hardiness_max", "flowering_season", "harvest_season",
+      "propagation", "attracts", "pruning_month", "flowers", "fruits",
+      "edible_fruit", "edible_leaf", "medicinal", "drought_tolerant",
+      "salt_tolerant", "thorny", "invasive", "tropical", "fruiting_season",
+      "harvest_method", "dimensions", "pruning_frequency", "pest_susceptibility",
+      "cones", "leaf", "rare", "cuisine",
+      "watering_quality", "watering_period", "water_depth_requirement",
+      "water_volume_requirement", "average_volume_requirement", "base_temperature",
+      "ph_level", "sunlight_duration", "temperature_tolerance",
+      "spacing_requirement", "seeds", "flower_color", "fruit_color",
     ];
     return Object.fromEntries(fields.filter((field) => Object.hasOwn(plant, field)).map((field) => [field, plant[field]]));
   }
@@ -790,6 +832,19 @@ class PlantmarkPanel extends HTMLElement {
     if (plant.soil?.length) facts.push(["mdi:terrain", this._t.soil, plant.soil.slice(0, 2).join(", ")]);
     if (plant.family) facts.push(["mdi:family-tree", this._t.family, plant.family]);
     if (plant.origin?.length) facts.push(["mdi:earth", this._t.origin, plant.origin.slice(0, 2).join(", ")]);
+    if (plant.growth_rate) facts.push(["mdi:chart-timeline-variant-shimmer", this._t.growthRate, plant.growth_rate]);
+    if (plant.maintenance) facts.push(["mdi:hand-heart-outline", this._t.maintenance, plant.maintenance]);
+    if (plant.hardiness_min || plant.hardiness_max) facts.push(["mdi:snowflake", this._t.hardiness, [plant.hardiness_min, plant.hardiness_max].filter(Boolean).join("–")]);
+    if (plant.flowering_season) facts.push(["mdi:flower", this._t.floweringSeason, plant.flowering_season]);
+    if (plant.propagation?.length) facts.push(["mdi:sprout-outline", this._t.propagation, plant.propagation.slice(0, 2).join(", ")]);
+    if (plant.dimensions) facts.push(["mdi:ruler", this._t.dimensions, plant.dimensions]);
+    if (plant.attracts?.length) facts.push(["mdi:bee-flower", this._t.attracts, plant.attracts.slice(0, 3).join(", ")]);
+    if (plant.pest_susceptibility?.length) facts.push(["mdi:bug-outline", this._t.pests, plant.pest_susceptibility.slice(0, 3).join(", ")]);
+    if (plant.watering_period) facts.push(["mdi:clock-outline", this._t.wateringPeriod, plant.watering_period]);
+    if (plant.watering_quality) facts.push(["mdi:water-check-outline", this._t.wateringQuality, plant.watering_quality]);
+    if (plant.temperature_tolerance || plant.base_temperature) facts.push(["mdi:thermometer", this._t.temperature, plant.temperature_tolerance || plant.base_temperature]);
+    if (plant.ph_level) facts.push(["mdi:ph", this._t.phLevel, plant.ph_level]);
+    if (plant.watering_interval_estimated) facts.push(["mdi:approximately-equal", this._t.estimatedInterval, this._t.estimatedInterval]);
     return facts.map(([icon, label, value]) => `<span class="care-fact" title="${escapeHtml(label)}"><ha-icon icon="${icon}"></ha-icon>${escapeHtml(value)}</span>`).join("");
   }
 
@@ -848,8 +903,9 @@ class PlantmarkPanel extends HTMLElement {
     return `
       :host{display:block;min-height:100vh;background:var(--primary-background-color);color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}*{box-sizing:border-box}.page{max-width:1440px;margin:0 auto;padding:32px 28px 56px}header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:28px}.heading{display:flex;align-items:center;gap:16px}.brand{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;color:#fff;background:linear-gradient(145deg,#4aa96c,#277c4b);box-shadow:0 10px 25px rgba(39,124,75,.25)}.brand ha-icon{--mdc-icon-size:32px}h1,h2,p{margin:0}h1{font-size:30px;line-height:1.15}.heading p,.modal-header p{color:var(--secondary-text-color);margin-top:5px}.header-actions,.card-actions,.modal-actions{display:flex;gap:10px}button,.upload-button{border:0;border-radius:12px;min-height:42px;padding:0 16px;font:inherit;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:transform .15s,background .15s,opacity .15s}button:active{transform:scale(.97)}button:disabled{opacity:.55;cursor:wait}.primary{background:var(--primary-color,#43a047);color:var(--text-primary-color,#fff)}.secondary{background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color)}.danger{background:color-mix(in srgb,var(--error-color,#db4437) 12%,transparent);color:var(--error-color,#db4437)}.icon-button{width:40px;height:40px;min-height:40px;padding:0;border-radius:50%;background:transparent;color:var(--secondary-text-color)}.icon-button:hover{background:var(--secondary-background-color);color:var(--primary-text-color)}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:24px}.stat{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:18px;padding:18px;display:flex;align-items:center;gap:14px;box-shadow:var(--ha-card-box-shadow,0 2px 8px rgba(0,0,0,.05))}.stat-icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center}.stat-icon.green{background:rgba(67,160,71,.14);color:#43a047}.stat-icon.blue{background:rgba(3,169,244,.14);color:#039be5}.stat-icon.purple{background:rgba(126,87,194,.14);color:#7e57c2}.stat strong{font-size:25px;display:block}.stat span:last-child{font-size:13px;color:var(--secondary-text-color)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:20px}.plant-card{overflow:hidden;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:22px;box-shadow:var(--ha-card-box-shadow,0 4px 18px rgba(0,0,0,.07));transition:transform .2s,box-shadow .2s}.plant-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.12)}.plant-image{height:210px;position:relative;background:var(--secondary-background-color)}.plant-image img{width:100%;height:100%;object-fit:cover}.image-placeholder{height:100%;display:grid;place-items:center;color:var(--disabled-text-color);background:linear-gradient(135deg,rgba(67,160,71,.1),rgba(139,195,74,.16))}.image-placeholder ha-icon{--mdc-icon-size:72px}.area-chip{position:absolute;left:14px;bottom:14px;max-width:calc(100% - 28px);padding:7px 11px;border-radius:999px;background:rgba(20,30,24,.78);backdrop-filter:blur(8px);color:#fff;font-size:12px;display:flex;align-items:center;gap:5px}.area-chip ha-icon{--mdc-icon-size:16px}.image-attribution{position:absolute;right:10px;top:10px;padding:4px 7px;border-radius:7px;background:rgba(20,30,24,.72);color:#fff;font-size:9px}.image-attribution a{color:#fff}.plant-content{padding:18px}.plant-title{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.plant-title h2{font-size:21px}.plant-title em{display:block;margin-top:4px;color:var(--secondary-text-color);font-size:13px}.schedule{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.schedule div{padding:10px 8px;border-radius:11px;background:var(--secondary-background-color);min-width:0}.schedule span{font-size:10px;color:var(--secondary-text-color);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.schedule strong{font-size:12px;display:block;margin-top:4px;white-space:nowrap}.schedule .due{background:color-mix(in srgb,var(--error-color,#db4437) 11%,transparent)}.schedule .due strong{color:var(--error-color,#db4437)}.sensor-row{display:flex;align-items:center;gap:11px;padding:11px;border-radius:12px;background:rgba(3,169,244,.09);margin-bottom:12px}.sensor-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:rgba(3,169,244,.15);color:#039be5}.sensor-row span:not(.sensor-icon){display:block;font-size:11px;color:var(--secondary-text-color)}.sensor-row strong{display:block;margin-top:2px}.care-facts{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.care-fact{display:flex;align-items:center;gap:4px;padding:5px 8px;border-radius:8px;background:color-mix(in srgb,var(--primary-color) 9%,transparent);font-size:11px}.care-fact ha-icon{--mdc-icon-size:15px;color:var(--primary-color)}.warnings{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.warning{display:flex;align-items:center;gap:4px;padding:5px 8px;border-radius:8px;background:rgba(255,152,0,.12);color:#ef8c00;font-size:11px}.warning ha-icon{--mdc-icon-size:15px}.notes{font-size:13px;line-height:1.45;color:var(--secondary-text-color);margin:12px 0;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.api-description{font-size:12px;margin:10px 0;color:var(--secondary-text-color)}.api-description summary{cursor:pointer;font-weight:600}.api-description p{line-height:1.45;margin-top:7px;white-space:pre-line}.card-actions{margin-top:16px}.card-actions .water{flex:1;background:rgba(3,169,244,.13);color:#0288d1}.card-actions .danger{width:44px;padding:0}.empty{min-height:420px;border:1px dashed var(--divider-color);border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;background:var(--card-background-color)}.empty-icon{width:90px;height:90px;border-radius:30px;background:rgba(67,160,71,.12);color:#43a047;display:grid;place-items:center;margin-bottom:18px}.empty-icon ha-icon{--mdc-icon-size:48px}.empty h2{font-size:23px}.empty p{max-width:440px;color:var(--secondary-text-color);margin:9px 0 20px}.modal-backdrop{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.48);backdrop-filter:blur(3px)}.modal{width:min(560px,100%);max-height:calc(100vh - 40px);overflow:auto;background:var(--card-background-color);border-radius:22px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.35)}.modal.wide{width:min(820px,100%)}.modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px}.modal-header h2{font-size:23px}.api-search-box{padding:15px;margin-bottom:19px;border:1px solid color-mix(in srgb,var(--primary-color) 30%,var(--divider-color));border-radius:14px;background:color-mix(in srgb,var(--primary-color) 5%,var(--card-background-color));display:grid;gap:11px}.api-search-title{display:flex;align-items:flex-start;gap:10px}.api-search-title>ha-icon{color:var(--primary-color)}.api-search-title strong,.api-search-title span{display:block}.api-search-title span{font-size:11px;color:var(--secondary-text-color);margin-top:3px}.source-badge{color:var(--primary-color)!important;display:flex!important;align-items:center;gap:4px}.source-badge ha-icon{--mdc-icon-size:14px}.api-search-row{display:flex;gap:8px}.api-search-row input{flex:1}.api-results{display:grid;gap:7px;max-height:270px;overflow:auto}.api-result{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:9px;padding:8px;border-radius:10px;background:var(--card-background-color);border:1px solid var(--divider-color)}.api-result img,.api-result-placeholder{width:46px;height:46px;border-radius:8px;object-fit:cover}.api-result-placeholder{display:grid;place-items:center;background:var(--secondary-background-color);color:var(--primary-color)}.api-result div{min-width:0}.api-result strong,.api-result span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.api-result span{font-size:10px;color:var(--secondary-text-color);margin-top:3px}.api-result button{min-height:34px;padding:0 10px;font-size:11px}.api-empty,.api-loading{font-size:12px;color:var(--secondary-text-color)}.api-loading{display:flex;align-items:center;gap:7px}.small-spinner{width:16px;height:16px;border:2px solid var(--divider-color);border-top-color:var(--primary-color);border-radius:50%;animation:spin .8s linear infinite}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:17px}.field{display:flex;flex-direction:column;gap:7px}.field>span{font-size:13px;font-weight:600}.field.full{grid-column:1/-1}input,select,textarea{width:100%;border:1px solid var(--divider-color);border-radius:11px;background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit;padding:11px 12px;outline:none}input:focus,select:focus,textarea:focus{border-color:var(--primary-color);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary-color) 20%,transparent)}textarea{resize:vertical}.number-suffix{display:flex;align-items:center;position:relative}.number-suffix span{position:absolute;right:12px;color:var(--secondary-text-color);font-size:12px}.number-suffix input{padding-right:55px}.image-upload{display:flex;align-items:center;gap:12px}.image-upload img,.mini-placeholder{width:76px;height:76px;border-radius:13px;object-fit:cover;background:var(--secondary-background-color)}.mini-placeholder{display:grid;place-items:center;color:var(--secondary-text-color)}.upload-button{background:var(--secondary-background-color);border:1px solid var(--divider-color);font-size:13px}.upload-button input{display:none}.field small{color:var(--secondary-text-color);font-size:11px;line-height:1.4}.field small a{color:var(--primary-color)}.checks{display:flex;flex-direction:row;gap:22px;flex-wrap:wrap}.check{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}.check input{width:18px;height:18px;accent-color:var(--primary-color)}.check ha-icon{--mdc-icon-size:18px}.api-settings{display:grid;gap:14px;margin-top:22px;padding-top:20px;border-top:1px solid var(--divider-color)}.api-settings-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.api-settings h3{margin:0 0 5px;font-size:17px}.api-settings p{color:var(--secondary-text-color);font-size:12px;line-height:1.4}.api-status{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:10px;padding:5px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.api-status.connected{background:rgba(67,160,71,.12);color:#43a047}.api-status ha-icon{--mdc-icon-size:14px}.remove-api{color:var(--error-color)}.modal-actions{justify-content:flex-end;margin-top:24px}.loading{min-height:360px;display:grid;place-items:center}.spinner{width:42px;height:42px;border:4px solid var(--divider-color);border-top-color:var(--primary-color);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.error{display:flex;align-items:center;gap:9px;padding:12px 14px;margin-bottom:18px;border-radius:12px;background:color-mix(in srgb,var(--error-color,#db4437) 12%,transparent);color:var(--error-color,#db4437)}.toast{position:fixed;z-index:1200;left:50%;bottom:30px;transform:translate(-50%,20px);padding:12px 18px;border-radius:11px;background:#263229;color:#fff;box-shadow:0 8px 30px rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.toast.error-toast{background:var(--error-color,#db4437)}
       .advanced-block{padding:14px;border:1px solid var(--divider-color);border-radius:13px;background:color-mix(in srgb,var(--secondary-background-color) 72%,transparent)}.advanced-block>small{margin-left:24px}.season-grid{display:grid;gap:8px;margin-top:10px}.season-row{display:grid;grid-template-columns:minmax(80px,1fr) 110px 110px auto;align-items:end;gap:8px}.season-row>strong{align-self:center}.season-row label{display:grid;gap:3px}.season-row label span{font-size:10px;color:var(--secondary-text-color)}.season-row input{padding:8px}.conditional-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}[data-enabled-by]{transition:opacity .15s}[data-enabled-by].inactive{opacity:.42;pointer-events:none}.advanced-block select{margin-top:4px}
+      .api-result-actions{display:flex;align-items:center;gap:6px}.api-page-link{width:34px;height:34px;padding:0;border-radius:10px;display:grid;place-items:center;text-decoration:none}.api-page-link ha-icon{--mdc-icon-size:18px}
       @media(max-width:850px){.page{padding:22px 16px 42px}header{align-items:flex-start;flex-direction:column}.header-actions{width:100%;flex-wrap:wrap}.header-actions button{flex:1}.stats{grid-template-columns:1fr}.stat{padding:13px}.grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.season-row{grid-template-columns:1fr 1fr}.season-row>strong,.season-row>span{grid-column:1/-1}.conditional-grid{grid-template-columns:1fr}}
-      @media(max-width:520px){h1{font-size:25px}.brand{width:48px;height:48px;border-radius:15px}.header-actions{display:grid;grid-template-columns:1fr 1fr}.header-actions #add{grid-column:1/-1}.plant-image{height:190px}.modal-backdrop{padding:0;align-items:flex-end}.modal,.modal.wide{width:100%;max-height:94vh;border-radius:22px 22px 0 0;padding:20px}.schedule{gap:5px}.schedule div{padding:9px 6px}.schedule strong{font-size:11px}.api-search-row{flex-direction:column}.api-result{grid-template-columns:42px 1fr}.api-result button{grid-column:1/-1}.api-settings-heading{flex-direction:column}.api-status{align-self:flex-start}}
+      @media(max-width:520px){h1{font-size:25px}.brand{width:48px;height:48px;border-radius:15px}.header-actions{display:grid;grid-template-columns:1fr 1fr}.header-actions #add{grid-column:1/-1}.plant-image{height:190px}.modal-backdrop{padding:0;align-items:flex-end}.modal,.modal.wide{width:100%;max-height:94vh;border-radius:22px 22px 0 0;padding:20px}.schedule{gap:5px}.schedule div{padding:9px 6px}.schedule strong{font-size:11px}.api-search-row{flex-direction:column}.api-result{grid-template-columns:42px 1fr}.api-result-actions{grid-column:1/-1}.api-result-actions button{flex:1}.api-settings-heading{flex-direction:column}.api-status{align-self:flex-start}}
     `;
   }
 }

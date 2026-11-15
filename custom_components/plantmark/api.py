@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import ipaddress
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -25,7 +26,6 @@ DETAIL_CACHE_SECONDS = 24 * 60 * 60
 MAX_RESULTS = 20
 MAX_REMOTE_IMAGE_BYTES = 1_500_000
 MAX_THUMBNAIL_BYTES = 250_000
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_IMAGE_HOSTS = {"perenual.com", "www.perenual.com"}
 ALLOWED_IMAGE_PATHS = ("/storage/species_image/", "/species_image/")
 
@@ -105,14 +105,11 @@ class PerenualClient:
                     async with self._session.get(
                         url,
                         timeout=REQUEST_TIMEOUT,
-                        allow_redirects=False,
+                        allow_redirects=True,
+                        max_redirects=3,
                     ) as response:
-                        content_type = response.headers.get("Content-Type", "").split(
-                            ";", 1
-                        )[0]
-                        if (
-                            response.status != 200
-                            or content_type not in ALLOWED_IMAGE_TYPES
+                        if response.status != 200 or not _safe_image_response_url(
+                            str(response.url)
                         ):
                             return None
                         if (
@@ -122,6 +119,9 @@ class PerenualClient:
                             return None
                         content = await response.content.read(max_bytes + 1)
                         if len(content) > max_bytes:
+                            return None
+                        content_type = _detected_image_type(content)
+                        if content_type is None:
                             return None
                         encoded = base64.b64encode(content).decode("ascii")
                         return f"data:{content_type};base64,{encoded}"
@@ -192,32 +192,57 @@ def clear_perenual_client(hass: HomeAssistant) -> None:
 
 def _search_result(payload: dict[str, Any]) -> dict[str, Any]:
     image = _image_data(payload.get("default_image"), thumbnail=True)
-    return {
-        "id": int(payload["id"]),
-        "common_name": _text(payload.get("common_name")),
-        "scientific_name": _first_text(payload.get("scientific_name")),
-        "other_names": _text_list(payload.get("other_name")),
-        "cycle": _text(payload.get("cycle")),
-        "watering": _text(payload.get("watering")),
-        "sunlight": _text_list(payload.get("sunlight")),
-        "indoor": payload.get("indoor")
-        if isinstance(payload.get("indoor"), bool)
-        else None,
-        **image,
-    }
+    result = _normalized_plant_data(payload)
+    result.update(
+        {
+            "id": int(payload["id"]),
+            "api_provider": "perenual",
+            "perenual_id": int(payload["id"]),
+            "perenual_url": _perenual_url(payload["id"]),
+            "api_last_synced": dt_util.now().isoformat(),
+            **image,
+        }
+    )
+    minimum, maximum = _watering_interval_range(
+        payload.get("watering_general_benchmark")
+    )
+    estimated = False
+    if minimum is None:
+        minimum, maximum = _watering_category_range(payload.get("watering"))
+        estimated = minimum is not None
+    result.update(
+        {
+            "watering_interval_days": minimum,
+            "watering_interval_min_days": minimum,
+            "watering_interval_max_days": maximum,
+            "watering_interval_estimated": estimated,
+        }
+    )
+    return result
 
 
 def _plant_details(payload: dict[str, Any]) -> dict[str, Any]:
     image = _image_data(payload.get("default_image"))
-    poisonous_pets = payload.get("poisonous_to_pets")
-    poisonous_humans = payload.get("poisonous_to_humans")
     watering_minimum, watering_maximum = _watering_interval_range(
         payload.get("watering_general_benchmark")
     )
     return {
+        **_normalized_plant_data(payload),
         "api_provider": "perenual",
         "perenual_id": int(payload["id"]),
+        "perenual_url": _perenual_url(payload["id"]),
         "api_last_synced": dt_util.now().isoformat(),
+        "watering_interval_days": watering_minimum,
+        "watering_interval_min_days": watering_minimum,
+        "watering_interval_max_days": watering_maximum,
+        "watering_interval_estimated": False,
+        **image,
+    }
+
+
+def _normalized_plant_data(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return all useful care fields available in a search or detail response."""
+    return {
         "common_name": _text(payload.get("common_name")),
         "scientific_name": _first_text(payload.get("scientific_name")),
         "other_names": _text_list(payload.get("other_name")),
@@ -226,23 +251,72 @@ def _plant_details(payload: dict[str, Any]) -> dict[str, Any]:
         "plant_type": _text(payload.get("type")),
         "cycle": _text(payload.get("cycle")),
         "watering": _text(payload.get("watering")),
-        "watering_interval_days": watering_minimum,
-        "watering_interval_min_days": watering_minimum,
-        "watering_interval_max_days": watering_maximum,
+        "watering_quality": _text(payload.get("watering_quality")),
+        "watering_period": _joined_text(payload.get("watering_period")),
+        "water_depth_requirement": _measurement_text(
+            payload.get("depth_water_requirement")
+        ),
+        "water_volume_requirement": _measurement_text(
+            payload.get("volume_water_requirement")
+        ),
+        "average_volume_requirement": _measurement_text(
+            payload.get("average_volume_requirement")
+            or payload.get("average_volume_requirements")
+        ),
+        "base_temperature": _measurement_text(payload.get("base_temperature")),
+        "ph_level": _measurement_text(payload.get("ph_level")),
+        "sunlight_duration": _measurement_text(payload.get("sunlight_duration")),
+        "temperature_tolerance": _measurement_text(
+            payload.get("temperature_tolerance")
+            or payload.get("temperature_tolerence")
+        ),
+        "spacing_requirement": _measurement_text(
+            payload.get("spacing_requirement")
+            or payload.get("spacing_requirements")
+        ),
         "sunlight": _text_list(payload.get("sunlight")),
         "soil": _text_list(payload.get("soil")),
         "care_level": _text(payload.get("care_level")),
         "description": _text(payload.get("description")),
-        "poisonous_to_pets": (
-            poisonous_pets if isinstance(poisonous_pets, bool) else None
-        ),
-        "poisonous_to_humans": (
-            poisonous_humans if isinstance(poisonous_humans, bool) else None
-        ),
-        "indoor": payload.get("indoor")
-        if isinstance(payload.get("indoor"), bool)
-        else None,
-        **image,
+        "growth_rate": _text(payload.get("growth_rate")),
+        "maintenance": _text(payload.get("maintenance")),
+        "hardiness_min": _nested_text(payload.get("hardiness"), "min"),
+        "hardiness_max": _nested_text(payload.get("hardiness"), "max"),
+        "flowering_season": _text(payload.get("flowering_season")),
+        "fruiting_season": _text(payload.get("fruiting_season")),
+        "harvest_season": _text(payload.get("harvest_season")),
+        "harvest_method": _text(payload.get("harvest_method")),
+        "dimensions": _measurement_text(payload.get("dimensions")),
+        "pruning_frequency": _measurement_text(payload.get("pruning_count")),
+        "seeds": _text(payload.get("seeds")),
+        "propagation": _text_list(payload.get("propagation")),
+        "attracts": _text_list(payload.get("attracts")),
+        "pruning_month": _text_list(payload.get("pruning_month")),
+        "pest_susceptibility": _text_list(payload.get("pest_susceptibility")),
+        "flower_color": _text_list(payload.get("flower_color")),
+        "fruit_color": _text_list(payload.get("fruit_color")),
+        **{
+            field: _optional_bool(payload.get(field))
+            for field in (
+                "indoor",
+                "poisonous_to_humans",
+                "poisonous_to_pets",
+                "flowers",
+                "fruits",
+                "edible_fruit",
+                "edible_leaf",
+                "medicinal",
+                "drought_tolerant",
+                "salt_tolerant",
+                "thorny",
+                "invasive",
+                "tropical",
+                "cones",
+                "leaf",
+                "rare",
+                "cuisine",
+            )
+        },
     }
 
 
@@ -286,6 +360,39 @@ def _trusted_image_url(value: Any) -> str | None:
     return url
 
 
+def _safe_image_response_url(value: str) -> bool:
+    """Reject unsafe redirect targets while allowing Perenual's image cloud."""
+    parsed = urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in (None, 443)
+    ):
+        return False
+    try:
+        address = ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        return True
+    return address.is_global
+
+
+def _detected_image_type(content: bytes) -> str | None:
+    """Detect supported images by their bytes instead of unreliable headers."""
+    if content.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 def _watering_interval_range(value: Any) -> tuple[int | None, int | None]:
     if not isinstance(value, dict):
         return None, None
@@ -305,6 +412,55 @@ def _watering_interval_range(value: Any) -> tuple[int | None, int | None]:
     minimum = max(1, min(365, min(numbers) * multiplier))
     maximum = max(minimum, min(365, max(numbers) * multiplier))
     return minimum, maximum
+
+
+def _watering_category_range(value: Any) -> tuple[int | None, int | None]:
+    """Map Perenual's broad search category to a conservative estimate."""
+    ranges = {
+        "frequent": (3, 5),
+        "average": (7, 10),
+        "minimum": (14, 21),
+        "none": (30, 60),
+    }
+    return ranges.get(str(value or "").strip().casefold(), (None, None))
+
+
+def _nested_text(value: Any, key: str) -> str | None:
+    return _text(value.get(key)) if isinstance(value, dict) else None
+
+
+def _measurement_text(value: Any) -> str | None:
+    """Format Perenual's small measurement/count objects for local storage."""
+    if not isinstance(value, dict):
+        return _text(value)
+    parts: list[str] = []
+    minimum = _text(value.get("min_value") or value.get("min"))
+    maximum = _text(value.get("max_value") or value.get("max"))
+    scalar = _text(value.get("value") or value.get("amount"))
+    if minimum or maximum:
+        parts.append("–".join(item for item in (minimum, maximum) if item))
+    elif scalar:
+        parts.append(scalar)
+    unit = _text(value.get("unit") or value.get("interval"))
+    if unit:
+        parts.append(unit)
+    return " ".join(parts) or None
+
+
+def _joined_text(value: Any) -> str | None:
+    values = _text_list(value)
+    return ", ".join(values) or None
+
+
+def _optional_bool(value: Any) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def _perenual_url(species_id: Any) -> str:
+    return (
+        "https://www.perenual.com/plant-species-database-search-finder/species/"
+        f"{int(species_id)}"
+    )
 
 
 def _first_text(value: Any) -> str | None:
