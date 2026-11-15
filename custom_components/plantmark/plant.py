@@ -26,6 +26,7 @@ _API_TEXT_FIELDS = (
     "sunlight_guide",
     "pruning_guide",
     "watering_interval_source",
+    "care_guide_source",
     "watering_quality",
     "watering_period",
     "water_depth_requirement",

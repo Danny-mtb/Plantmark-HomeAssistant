@@ -142,6 +142,10 @@ Ist der Pflegeleitfaden-Endpunkt im Perenual-Tarif gesperrt, versucht Plantmark
 dieselben Abschnitte von der öffentlichen Perenual-Pflanzenseite zu übernehmen.
 Dieser Abruf verwendet ausschließlich die feste Perenual-Seite der ausgewählten
 Pflanzen-ID und wird wie die übrigen Detaildaten 24 Stunden zwischengespeichert.
+Vor diesem Seiten-Fallback sucht Plantmark den offiziellen Pflegeleitfaden auch
+über den wissenschaftlichen Pflanzennamen. Das hilft, wenn Perenual den
+Suchtreffer unter einer neuen v2-ID führt, der Guide aber über einen anderen
+internen Datensatz erreichbar ist.
 
 ## Veröffentlichen
 

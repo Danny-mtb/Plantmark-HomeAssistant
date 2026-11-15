@@ -90,9 +90,12 @@ class PerenualClient:
 
         return await self._async_cached(cache_key, SEARCH_CACHE_SECONDS, _request)
 
-    async def async_details(self, species_id: int) -> dict[str, Any]:
+    async def async_details(
+        self, species_id: int, search_name: str | None = None
+    ) -> dict[str, Any]:
         """Load and merge botanical details with the separate care guide."""
-        cache_key = f"details:{species_id}"
+        normalized_name = _text(search_name)
+        cache_key = f"details:{species_id}:{(normalized_name or '').casefold()}"
 
         async def _request() -> dict[str, Any]:
             detail_result, guide_result = await asyncio.gather(
@@ -121,6 +124,25 @@ class PerenualClient:
                     species_id,
                     guide_result,
                 )
+            if "watering_guide" not in guide and normalized_name:
+                try:
+                    guide_by_name = await self._async_get_url(
+                        CARE_GUIDE_URL, {"q": normalized_name}
+                    )
+                    if isinstance(guide_by_name, dict):
+                        named_guide = _care_guide_data(
+                            guide_by_name, species_id, allow_first=True
+                        )
+                        if "watering_guide" in named_guide:
+                            named_guide["care_guide_source"] = "api_name_search"
+                        named_guide.update(guide)
+                        guide = named_guide
+                except PerenualApiError as err:
+                    _LOGGER.debug(
+                        "Perenual care-guide name search unavailable for %s: %s",
+                        normalized_name,
+                        err,
+                    )
             if "watering_guide" not in guide:
                 public_guide = await self._async_public_care_guide(species_id)
                 public_guide.update(guide)
@@ -131,6 +153,7 @@ class PerenualClient:
                 details.setdefault("perenual_id", species_id)
                 details.setdefault("perenual_url", _perenual_url(species_id))
                 details.setdefault("api_last_synced", dt_util.now().isoformat())
+                details.setdefault("care_guide_source", "unavailable")
                 return details
             if errors:
                 raise errors[0]
@@ -348,7 +371,9 @@ def _plant_details(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _care_guide_data(payload: dict[str, Any], species_id: int) -> dict[str, Any]:
+def _care_guide_data(
+    payload: dict[str, Any], species_id: int, *, allow_first: bool = False
+) -> dict[str, Any]:
     """Normalize the independent Perenual plant-guide response."""
     data = payload.get("data")
     if not isinstance(data, list):
@@ -362,6 +387,8 @@ def _care_guide_data(payload: dict[str, Any], species_id: int) -> dict[str, Any]
         ),
         None,
     )
+    if record is None and allow_first:
+        record = next((item for item in data if isinstance(item, dict)), None)
     if not isinstance(record, dict) or not isinstance(record.get("section"), list):
         return {}
 
@@ -374,7 +401,10 @@ def _care_guide_data(payload: dict[str, Any], species_id: int) -> dict[str, Any]
         if guide_type and description:
             guides[guide_type.casefold()] = description
 
-    return _normalized_guides(guides)
+    normalized = _normalized_guides(guides)
+    if "watering_guide" in normalized:
+        normalized["care_guide_source"] = "api"
+    return normalized
 
 
 def _normalized_guides(guides: dict[str, str]) -> dict[str, Any]:
@@ -476,7 +506,10 @@ def _public_care_guide_data(source: str) -> dict[str, Any]:
         ]
         if candidates:
             guides["watering"] = max(candidates, key=len)
-    return _normalized_guides(guides)
+    normalized = _normalized_guides(guides)
+    if "watering_guide" in normalized:
+        normalized["care_guide_source"] = "public_page"
+    return normalized
 
 
 def _collect_embedded_guides(source: str, guides: dict[str, str]) -> None:

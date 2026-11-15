@@ -361,6 +361,9 @@ async def websocket_api_search(
     {
         vol.Required("type"): "plantmark/api/details",
         vol.Required("species_id"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Optional("search_name"): vol.All(
+            str, vol.Strip, vol.Length(min=2, max=100)
+        ),
     }
 )
 @websocket_api.require_admin
@@ -372,7 +375,7 @@ async def websocket_api_details(
 ) -> None:
     """Return normalized care data for one Perenual species."""
     client = _perenual_client(hass, _config_entry(hass))
-    details = await client.async_details(msg["species_id"])
+    details = await client.async_details(msg["species_id"], msg.get("search_name"))
     details["image_data"] = await client.async_image_data(details.get("image_url"))
     connection.send_result(msg["id"], {"plant": details})
 

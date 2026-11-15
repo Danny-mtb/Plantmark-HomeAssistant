@@ -3,6 +3,13 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.3.3 - 2026-11-15
+
+- Retry Perenual's official care-guide API by scientific or common plant name
+  when the selected v2 species ID is outside the account's accessible range.
+- Report clearly when neither the ID, name search nor public page provides a
+  care guide instead of silently claiming that all care data was imported.
+
 ## 1.3.2 - 2026-11-15
 
 - Fall back to the public Perenual species page when the account cannot access

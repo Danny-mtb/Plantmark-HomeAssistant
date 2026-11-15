@@ -63,6 +63,7 @@ const TEXT = {
     openDatabaseEntry: "Pflanzenseite öffnen",
     dataApplied: "Pflegedaten wurden übernommen",
     basicDataApplied: "Basisdaten wurden übernommen. Perenual stellt die Detaildaten für diese Pflanze in deinem Tarif nicht bereit.",
+    guideUnavailable: "Perenual hat für diese Pflanze keinen Pflegeleitfaden geliefert. Gießzeitraum und Giftigkeit können deshalb fehlen.",
     paidDetails: "Detaildaten eventuell nur mit kostenpflichtigem Perenual-Tarif",
     apiNotConfigured: "Hinterlege zuerst deinen persönlichen Perenual-API-Key in den Einstellungen.",
     openSettings: "API einrichten",
@@ -181,6 +182,7 @@ const TEXT = {
     openDatabaseEntry: "Open plant page",
     dataApplied: "Plant care data applied",
     basicDataApplied: "Basic data was applied. Perenual does not provide this plant's details with your current plan.",
+    guideUnavailable: "Perenual did not provide a care guide for this plant. The watering window and toxicity may therefore be missing.",
     paidDetails: "Details may require a paid Perenual plan",
     apiNotConfigured: "First add your personal Perenual API key in settings.",
     openSettings: "Configure API",
@@ -605,12 +607,18 @@ class PlantmarkPanel extends HTMLElement {
     let errorMessage = null;
     let applied = false;
     let basicDataOnly = false;
+    let guideUnavailable = false;
     try {
       const searchResult = this._apiResults?.find((result) => Number(result.id) === speciesId);
       let details;
       try {
-        const response = await this._hass.callWS({ type: "plantmark/api/details", species_id: speciesId });
+        const response = await this._hass.callWS({
+          type: "plantmark/api/details",
+          species_id: speciesId,
+          search_name: searchResult?.scientific_name || searchResult?.common_name || this._apiQuery,
+        });
         details = response.plant || {};
+        guideUnavailable = details.care_guide_source === "unavailable";
       } catch (error) {
         if (!searchResult) throw error;
         details = {
@@ -648,7 +656,7 @@ class PlantmarkPanel extends HTMLElement {
     } finally {
       this._apiLoading = false;
       this._render();
-      if (applied) this._showToast(basicDataOnly ? this._t.basicDataApplied : this._t.dataApplied);
+      if (applied) this._showToast(basicDataOnly ? this._t.basicDataApplied : guideUnavailable ? this._t.guideUnavailable : this._t.dataApplied, basicDataOnly || guideUnavailable);
       if (errorMessage) this._showToast(errorMessage, true);
     }
   }
@@ -672,6 +680,7 @@ class PlantmarkPanel extends HTMLElement {
       "spacing_requirement", "seeds", "flower_color", "fruit_color",
       "watering_guide", "sunlight_guide", "pruning_guide",
       "watering_interval_source",
+      "care_guide_source",
     ];
     return Object.fromEntries(fields.filter((field) => Object.hasOwn(plant, field)).map((field) => [field, plant[field]]));
   }
