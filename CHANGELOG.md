@@ -3,6 +3,12 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.2.3 - 2026-11-15
+
+- Publish the Perenual image proxy, local API-image storage and free-plan detail
+  fallback under a new version after the `v1.2.2` tag accidentally referenced
+  the previous `1.2.1` commit.
+
 ## 1.2.2 - 2026-11-15
 
 - Load trusted Perenual thumbnails through the Home Assistant backend so search
