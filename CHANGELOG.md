@@ -3,6 +3,12 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.3.2 - 2026-11-15
+
+- Fall back to the public Perenual species page when the account cannot access
+  the separate care-guide API, then import its watering, sunlight and pruning
+  guidance and explicit watering interval.
+
 ## 1.3.1 - 2026-11-15
 
 - Load Perenual's separate plant-care guide, display its watering, sunlight and

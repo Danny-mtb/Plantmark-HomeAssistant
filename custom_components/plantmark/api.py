@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import html
 import ipaddress
+import json
+import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
+from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -21,16 +25,22 @@ from .const import DOMAIN
 
 API_BASE_URL = "https://www.perenual.com/api/v2"
 CARE_GUIDE_URL = "https://www.perenual.com/api/species-care-guide-list"
+PUBLIC_PLANT_URL = (
+    "https://www.perenual.com/plant-species-database-search-finder/species"
+)
 REQUEST_TIMEOUT = ClientTimeout(total=20)
+PUBLIC_PAGE_TIMEOUT = ClientTimeout(total=15)
 SEARCH_CACHE_SECONDS = 30 * 60
 DETAIL_CACHE_SECONDS = 24 * 60 * 60
 MAX_RESULTS = 20
 MAX_REMOTE_IMAGE_BYTES = 1_500_000
 MAX_THUMBNAIL_BYTES = 250_000
+MAX_PUBLIC_PAGE_BYTES = 2_000_000
 ALLOWED_IMAGE_HOSTS = {"perenual.com", "www.perenual.com"}
 ALLOWED_IMAGE_PATHS = ("/storage/species_image/", "/species_image/")
 
 _CLIENT_DATA = "perenual_client"
+_LOGGER = logging.getLogger(__name__)
 
 
 class PerenualApiError(HomeAssistantError):
@@ -105,6 +115,16 @@ class PerenualClient:
                 if isinstance(guide_result, dict)
                 else {}
             )
+            if isinstance(guide_result, Exception):
+                _LOGGER.debug(
+                    "Perenual care-guide API unavailable for species %s: %s",
+                    species_id,
+                    guide_result,
+                )
+            if "watering_guide" not in guide:
+                public_guide = await self._async_public_care_guide(species_id)
+                public_guide.update(guide)
+                guide = public_guide
             details.update(guide)
             if details:
                 details.setdefault("api_provider", "perenual")
@@ -117,6 +137,61 @@ class PerenualClient:
             raise PerenualApiError("Perenual returned no plant care data")
 
         return await self._async_cached(cache_key, DETAIL_CACHE_SECONDS, _request)
+
+    async def _async_public_care_guide(self, species_id: int) -> dict[str, Any]:
+        """Read care guidance from Perenual's public species page as fallback."""
+        try:
+            async with self._session.get(
+                f"{PUBLIC_PLANT_URL}/{species_id}",
+                timeout=PUBLIC_PAGE_TIMEOUT,
+                allow_redirects=True,
+                max_redirects=3,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (X11; Linux x86_64) "
+                        "AppleWebKit/537.36 Chrome/140 Safari/537.36"
+                    )
+                },
+            ) as response:
+                final_url = urlsplit(str(response.url))
+                if (
+                    response.status != 200
+                    or final_url.scheme != "https"
+                    or final_url.hostname not in ALLOWED_IMAGE_HOSTS
+                ):
+                    _LOGGER.debug(
+                        "Perenual public page unavailable for species %s: %s",
+                        species_id,
+                        response.status,
+                    )
+                    return {}
+                content_type = response.headers.get("Content-Type", "")
+                if "text/html" not in content_type.casefold():
+                    return {}
+                if (
+                    response.content_length is not None
+                    and response.content_length > MAX_PUBLIC_PAGE_BYTES
+                ):
+                    return {}
+                content = await response.content.read(MAX_PUBLIC_PAGE_BYTES + 1)
+                if len(content) > MAX_PUBLIC_PAGE_BYTES:
+                    return {}
+                guide = _public_care_guide_data(
+                    content.decode(response.charset or "utf-8", errors="replace")
+                )
+                if not guide:
+                    _LOGGER.debug(
+                        "No care guidance found on public Perenual page for %s",
+                        species_id,
+                    )
+                return guide
+        except (ClientError, TimeoutError, UnicodeError, LookupError) as err:
+            _LOGGER.debug(
+                "Unable to read public Perenual page for species %s: %s",
+                species_id,
+                err,
+            )
+            return {}
 
     async def async_image_data(
         self, image_url: Any, *, max_bytes: int = MAX_REMOTE_IMAGE_BYTES
@@ -299,7 +374,12 @@ def _care_guide_data(payload: dict[str, Any], species_id: int) -> dict[str, Any]
         if guide_type and description:
             guides[guide_type.casefold()] = description
 
-    normalized = {
+    return _normalized_guides(guides)
+
+
+def _normalized_guides(guides: dict[str, str]) -> dict[str, Any]:
+    """Convert care-guide sections and any explicit watering interval."""
+    normalized: dict[str, Any] = {
         f"{guide_type}_guide": description
         for guide_type, description in guides.items()
         if guide_type in {"watering", "sunlight", "pruning"}
@@ -318,6 +398,128 @@ def _care_guide_data(payload: dict[str, Any], species_id: int) -> dict[str, Any]
             }
         )
     return normalized
+
+
+class _CarePageParser(HTMLParser):
+    """Collect headings, paragraphs and JSON scripts from a public plant page."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.blocks: list[tuple[str, str]] = []
+        self.scripts: list[str] = []
+        self._tag: str | None = None
+        self._parts: list[str] = []
+        self._script_parts: list[str] | None = None
+
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        if tag == "script":
+            self._script_parts = []
+        elif self._tag is None and tag in {"p", "li", "h1", "h2", "h3", "h4"}:
+            self._tag = tag
+            self._parts = []
+
+    def handle_data(self, data: str) -> None:
+        if self._script_parts is not None:
+            self._script_parts.append(data)
+        elif self._tag is not None:
+            self._parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script" and self._script_parts is not None:
+            self.scripts.append("".join(self._script_parts))
+            self._script_parts = None
+        elif tag == self._tag:
+            text = _compact_text(" ".join(self._parts))
+            if text:
+                self.blocks.append((tag, text))
+            self._tag = None
+            self._parts = []
+
+
+def _public_care_guide_data(source: str) -> dict[str, Any]:
+    """Extract care sections from rendered HTML or embedded page JSON."""
+    parser = _CarePageParser()
+    try:
+        parser.feed(source)
+    except (ValueError, AssertionError):
+        return {}
+
+    guides: dict[str, str] = {}
+    for index, (tag, heading) in enumerate(parser.blocks):
+        guide_type = heading.casefold().strip(" :")
+        if tag not in {"h1", "h2", "h3", "h4"} or guide_type not in {
+            "watering",
+            "sunlight",
+            "pruning",
+        }:
+            continue
+        paragraphs: list[str] = []
+        for next_tag, text in parser.blocks[index + 1 :]:
+            if next_tag in {"h1", "h2", "h3", "h4"}:
+                break
+            if next_tag in {"p", "li"}:
+                paragraphs.append(text)
+        description = _compact_text("\n\n".join(paragraphs))
+        if len(description) >= 40:
+            guides[guide_type] = description
+
+    for script in parser.scripts:
+        _collect_embedded_guides(script, guides)
+
+    if "watering" not in guides:
+        candidates = [
+            text
+            for tag, text in parser.blocks
+            if tag in {"p", "li"} and _looks_like_watering_guide(text)
+        ]
+        if candidates:
+            guides["watering"] = max(candidates, key=len)
+    return _normalized_guides(guides)
+
+
+def _collect_embedded_guides(source: str, guides: dict[str, str]) -> None:
+    """Find care descriptions in JSON and Next.js embedded strings."""
+    queue: list[Any] = []
+    try:
+        queue.append(json.loads(source))
+    except (json.JSONDecodeError, TypeError):
+        pass
+    for match in re.finditer(r'"((?:\\.|[^"\\]){40,})"', source):
+        try:
+            queue.append(json.loads(f'"{match.group(1)}"'))
+        except json.JSONDecodeError:
+            continue
+
+    while queue:
+        value = queue.pop()
+        if isinstance(value, dict):
+            guide_type = str(value.get("type") or "").casefold()
+            description = _compact_text(value.get("description"))
+            if guide_type in {"watering", "sunlight", "pruning"} and len(
+                description
+            ) >= 40:
+                guides.setdefault(guide_type, description)
+            queue.extend(value.values())
+        elif isinstance(value, list):
+            queue.extend(value)
+        elif isinstance(value, str) and _looks_like_watering_guide(value):
+            guides.setdefault("watering", _compact_text(value))
+
+
+def _looks_like_watering_guide(value: Any) -> bool:
+    text = _compact_text(value)
+    lowered = text.casefold()
+    return (
+        len(text) >= 60
+        and any(word in lowered for word in ("water", "watering"))
+        and any(word in lowered for word in ("soil", "days", "weeks", "moist"))
+    )
+
+
+def _compact_text(value: Any) -> str:
+    return re.sub(r"[ \t\r\f\v]+", " ", html.unescape(str(value or ""))).strip()
 
 
 def _normalized_plant_data(payload: dict[str, Any]) -> dict[str, Any]:

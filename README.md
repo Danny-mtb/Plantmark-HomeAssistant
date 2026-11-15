@@ -138,6 +138,10 @@ Wenn der verwendete Perenual-Tarif den separaten Pflegeleitfaden freigibt,
 übernimmt Plantmark zusätzlich die vollständigen Texte für Wässern, Licht und
 Schnitt. Eine darin eindeutig genannte Angabe wie „every 7-10 days“ wird als
 Gießzeitraum von 7 bis 10 Tagen verwendet.
+Ist der Pflegeleitfaden-Endpunkt im Perenual-Tarif gesperrt, versucht Plantmark
+dieselben Abschnitte von der öffentlichen Perenual-Pflanzenseite zu übernehmen.
+Dieser Abruf verwendet ausschließlich die feste Perenual-Seite der ausgewählten
+Pflanzen-ID und wird wie die übrigen Detaildaten 24 Stunden zwischengespeichert.
 
 ## Veröffentlichen
 
