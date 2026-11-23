@@ -3,6 +3,14 @@
 All notable changes to the Plantmark Home Assistant integration are documented
 in this file.
 
+## 1.5.0 - 2026-11-23
+
+- Add calendar synchronization: select an existing writable Home Assistant
+  calendar, such as an iCloud calendar connected through CalDAV, in the
+  Plantmark settings to receive every watering window as an all-day event.
+- Remove outdated upcoming Plantmark events automatically when the target
+  calendar supports deleting events, without touching any other events.
+
 ## 1.4.0 - 2026-11-15
 
 - Move watering reminders from individual plants to one central Plantmark

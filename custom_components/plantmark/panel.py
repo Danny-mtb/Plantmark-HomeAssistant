@@ -25,10 +25,12 @@ from .const import (
     CONF_NOTIFICATION_TARGET,
     CONF_PERENUAL_API_KEY,
     CONF_PLANTS,
+    CONF_SYNC_CALENDAR,
     CONF_WATERING_REMINDER_ENABLED,
     DEFAULT_WATER_AMOUNT,
     DOMAIN,
 )
+from .calendar_sync import calendar_targets
 from .plant import global_reminder_settings, new_plant, parse_import, updated_plant
 
 PANEL_URL = "plantmark"
@@ -144,12 +146,14 @@ def websocket_list(
             "plants": deepcopy(list(entry.options.get(CONF_PLANTS, []))),
             "areas": areas,
             "notification_targets": _notification_targets(hass),
+            "calendar_targets": calendar_targets(hass),
             "settings": {
                 CONF_DEFAULT_WATER_AMOUNT: entry.options.get(
                     CONF_DEFAULT_WATER_AMOUNT, DEFAULT_WATER_AMOUNT
                 ),
                 CONF_WATERING_REMINDER_ENABLED: reminder_enabled,
                 CONF_NOTIFICATION_TARGET: notification_target,
+                CONF_SYNC_CALENDAR: entry.options.get(CONF_SYNC_CALENDAR) or "",
                 "perenual_configured": bool(entry.data.get(CONF_PERENUAL_API_KEY)),
             },
         },
@@ -319,13 +323,14 @@ async def websocket_import(
         vol.Optional("notification_target", default=""): vol.All(
             str, vol.Strip, vol.Length(max=255)
         ),
+        vol.Optional(CONF_SYNC_CALENDAR): vol.All(str, vol.Strip, vol.Length(max=255)),
         vol.Optional("perenual_api_key"): vol.All(str, vol.Strip, vol.Length(max=512)),
         vol.Optional("remove_perenual_api_key", default=False): bool,
     }
 )
 @websocket_api.require_admin
-@callback
-def websocket_settings(
+@websocket_api.async_response
+async def websocket_settings(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
@@ -346,6 +351,16 @@ def websocket_settings(
             )
     options[CONF_WATERING_REMINDER_ENABLED] = reminder_enabled
     options[CONF_NOTIFICATION_TARGET] = notification_target
+    previous_calendar = str(options.get(CONF_SYNC_CALENDAR) or "")
+    if CONF_SYNC_CALENDAR in msg:
+        sync_calendar = msg[CONF_SYNC_CALENDAR]
+        if sync_calendar and sync_calendar != previous_calendar and sync_calendar not in {
+            item["id"] for item in calendar_targets(hass)
+        }:
+            raise HomeAssistantError(
+                "The selected calendar is unavailable or does not allow new events"
+            )
+        options[CONF_SYNC_CALENDAR] = sync_calendar
     plants = deepcopy(list(options.get(CONF_PLANTS, [])))
     for plant in plants:
         if isinstance(plant, dict):
@@ -362,6 +377,13 @@ def websocket_settings(
     if key_changed:
         clear_perenual_client(hass)
     hass.config_entries.async_update_entry(entry, data=data, options=options)
+    calendar_sync = getattr(entry.runtime_data, "calendar_sync", None)
+    current_calendar = str(options.get(CONF_SYNC_CALENDAR) or "")
+    if calendar_sync is not None:
+        if previous_calendar and previous_calendar != current_calendar:
+            hass.async_create_task(calendar_sync.async_clear(previous_calendar))
+        if current_calendar:
+            hass.async_create_task(calendar_sync.async_sync())
     connection.send_result(
         msg["id"], {"perenual_configured": bool(data.get(CONF_PERENUAL_API_KEY))}
     )

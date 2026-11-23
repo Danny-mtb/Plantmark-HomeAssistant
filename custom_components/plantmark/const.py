@@ -14,6 +14,7 @@ CONF_DEFAULT_WATER_AMOUNT: Final = "default_water_amount_ml"
 CONF_WATERING_REMINDER_ENABLED: Final = "watering_reminder_enabled"
 CONF_NOTIFICATION_TARGET: Final = "notification_target"
 CONF_PERENUAL_API_KEY: Final = "perenual_api_key"
+CONF_SYNC_CALENDAR: Final = "sync_calendar_entity_id"
 
 DEFAULT_LIBRARY_NAME: Final = "Plantmark"
 DEFAULT_WATERING_INTERVAL: Final = 7

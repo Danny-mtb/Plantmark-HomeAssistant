@@ -28,6 +28,7 @@ class PlantmarkDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, A
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.entry = entry
+        self.calendar_sync: Any = None
         super().__init__(
             hass,
             logger=_LOGGER,

@@ -118,6 +118,12 @@ const TEXT = {
     notificationTarget: "Benachrichtigung senden an",
     notificationHelp: "Verwendet ausschließlich Home-Assistant-Benachrichtigungen und vorhandene Notify-Integrationen.",
     selectNotification: "Benachrichtigungsziel auswählen",
+    calendarSync: "Kalender-Synchronisation",
+    calendarSyncHelp: "Trägt jeden Gießzeitraum als ganztägigen Termin in einen vorhandenen Kalender ein, z. B. einen iCloud-Kalender „Gießen“ über die CalDAV-Integration.",
+    calendarTarget: "Synchronisieren mit",
+    noCalendarSync: "Nicht synchronisieren",
+    calendarNoDelete: "kann keine Termine löschen",
+    calendarTargetHelp: "Angezeigt werden alle Kalender, in denen Home Assistant Termine anlegen darf. Erlaubt der Kalender auch das Löschen, werden veraltete künftige Plantmark-Termine automatisch entfernt.",
     wateringWindow: "Gießzeitraum",
   },
   en: {
@@ -239,6 +245,12 @@ const TEXT = {
     notificationTarget: "Send notification to",
     notificationHelp: "Uses only Home Assistant notifications and configured notify integrations.",
     selectNotification: "Select notification target",
+    calendarSync: "Calendar sync",
+    calendarSyncHelp: "Adds every watering window as an all-day event to an existing calendar, for example an iCloud \"Watering\" calendar connected through the CalDAV integration.",
+    calendarTarget: "Synchronize with",
+    noCalendarSync: "Do not synchronize",
+    calendarNoDelete: "cannot delete events",
+    calendarTargetHelp: "Lists every calendar in which Home Assistant may create events. If the calendar also allows deleting, outdated upcoming Plantmark events are removed automatically.",
     wateringWindow: "Watering window",
   },
 };
@@ -484,6 +496,7 @@ class PlantmarkPanel extends HTMLElement {
     const reminder = Boolean(this._data.settings?.watering_reminder_enabled);
     const selectedTarget = String(this._data.settings?.notification_target || "");
     const notificationOptions = this._notificationOptions(selectedTarget);
+    const calendarOptions = this._calendarOptions(String(this._data.settings?.sync_calendar_entity_id || ""));
     return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true">
       <div class="modal-header"><div><h2>${t.settingsTitle}</h2><p>${t.amountHelp}</p></div><button class="icon-button close"><ha-icon icon="mdi:close"></ha-icon></button></div>
       <form id="settings-form">
@@ -492,6 +505,10 @@ class PlantmarkPanel extends HTMLElement {
           <div class="api-settings-heading"><div><h3>${t.centralReminders}</h3><p>${t.centralReminderHelp}</p></div></div>
           <label class="check"><input id="global-watering-reminder" name="watering_reminder_enabled" type="checkbox" ${reminder ? "checked" : ""}> ${t.reminder}</label>
           <div data-enabled-by="global-watering-reminder"><label class="field"><span>${t.notificationTarget}</span><select name="notification_target"><option value="">${t.selectNotification}</option>${notificationOptions}</select><small>${t.notificationHelp}</small></label></div>
+        </section>
+        <section class="api-settings">
+          <div class="api-settings-heading"><div><h3>${t.calendarSync}</h3><p>${t.calendarSyncHelp}</p></div></div>
+          <label class="field"><span>${t.calendarTarget}</span><select name="sync_calendar_entity_id"><option value="">${t.noCalendarSync}</option>${calendarOptions}</select><small>${t.calendarTargetHelp}</small></label>
         </section>
         <section class="api-settings">
           <div class="api-settings-heading"><div><h3>${t.perenualTitle}</h3><p>${t.perenualDescription}</p></div><span class="api-status ${configured ? "connected" : ""}"><ha-icon icon="${configured ? "mdi:check-circle" : "mdi:minus-circle-outline"}"></ha-icon>${configured ? t.perenualConfigured : t.perenualMissing}</span></div>
@@ -828,6 +845,7 @@ class PlantmarkPanel extends HTMLElement {
         default_water_amount_ml: amount,
         watering_reminder_enabled: form.get("watering_reminder_enabled") === "on",
         notification_target: String(form.get("notification_target") || ""),
+        sync_calendar_entity_id: String(form.get("sync_calendar_entity_id") || ""),
         perenual_api_key: apiKey || undefined,
         remove_perenual_api_key: form.get("remove_perenual_api_key") === "on",
       });
@@ -853,6 +871,15 @@ class PlantmarkPanel extends HTMLElement {
     const searchable = `${state.entity_id} ${state.attributes?.friendly_name || ""}`.toLowerCase();
     const plantContext = ["moisture", "boden", "soil", "plant", "pflanze", "flower", "erde"].some((word) => searchable.includes(word));
     return plantContext && (deviceClass === "humidity" || unit === "%");
+  }
+
+  _calendarOptions(selected) {
+    const targets = [...(this._data.calendar_targets || [])];
+    if (selected && !targets.some((target) => target.id === selected)) targets.push({ id: selected, name: selected, can_delete: true });
+    return targets.map((target) => {
+      const hint = target.can_delete ? "" : ` (${this._t.calendarNoDelete})`;
+      return `<option value="${escapeHtml(target.id)}" ${target.id === selected ? "selected" : ""}>${escapeHtml(target.name)} · ${escapeHtml(target.id)}${escapeHtml(hint)}</option>`;
+    }).join("");
   }
 
   _notificationOptions(selected) {

@@ -21,6 +21,8 @@ from a responsive Plantmark page in the Home Assistant sidebar.
 - Configure watering windows such as 7–10 days and optional individual windows
   for spring, summer, autumn, and winter.
 - Display all upcoming watering windows in a shared Home Assistant calendar.
+- Synchronize watering windows into an existing calendar, for example an iCloud
+  calendar connected through the CalDAV integration.
 - Configure watering reminders centrally for all plants, using one Home
   Assistant notification target.
 - Send reminders through persistent notifications, modern `notify` entities,
@@ -67,7 +69,8 @@ All normal management is available from the Plantmark sidebar page:
 - **Import** — import a JSON list or an old response containing a top-level
   `plants` list.
 - **Settings** — configure the default watering amount, central reminders, the
-  notification target, and the optional Perenual API key.
+  notification target, calendar synchronization, and the optional Perenual API
+  key.
 
 Watering windows use an earliest and latest day. Seasonal watering can provide
 different windows for all four meteorological seasons in the Northern
@@ -95,6 +98,28 @@ dismisses the corresponding persistent notification.
 When upgrading from a version with per-plant reminders, Plantmark temporarily
 uses the first enabled legacy reminder and its target as the central setting.
 Saving the central settings removes the obsolete per-plant reminder fields.
+
+## Calendar synchronization
+
+Under **Plantmark → Settings → Calendar sync** you can select any existing Home
+Assistant calendar that allows creating events. Plantmark then adds one
+all-day event per plant and watering window (for example
+"💧 Ficus gießen" from the earliest to the latest watering day).
+
+To use an iCloud calendar such as "Gießen":
+
+1. Create an app-specific password at [account.apple.com](https://account.apple.com).
+2. Add the **CalDAV** integration in Home Assistant with the URL
+   `https://caldav.icloud.com`, your Apple ID, and the app-specific password.
+3. Select the resulting calendar entity, e.g. `calendar.giessen`, in the
+   Plantmark settings.
+
+Synchronization runs after every change and at least every 15 minutes. Events
+are recognized by a `Plantmark-ID:` line in their description; other events in
+the calendar are never touched. If the calendar also supports deleting events,
+outdated upcoming Plantmark events are removed after watering, postponing, or
+deleting a plant, and when another calendar is selected. Past events remain as
+history.
 
 ## Optional Perenual plant database
 
